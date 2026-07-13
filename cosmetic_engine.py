@@ -580,12 +580,12 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         skin_guess = "normal"
 
     metrics = [
-        {"id": "hydration", "label": "Увлажнённость", "score": round(hydration), "hint": "барьер и комфорт"},
-        {"id": "pores", "label": "Поры", "score": round(pores), "hint": "видимость и Т-зона"},
+        {"id": "hydration", "label": "Увлажнённость", "score": round(hydration), "hint": "комфорт"},
+        {"id": "pores", "label": "Поры", "score": round(pores), "hint": "видимость"},
         {"id": "redness", "label": "Покраснения", "score": round(redness), "hint": "реактивность"},
         {"id": "radiance", "label": "Сияние", "score": round(radiance), "hint": "ровность тона"},
-        {"id": "fine_lines", "label": "Мелкие линии", "score": round(fine_lines), "hint": "плотность"},
-        {"id": "barrier", "label": "Барьер", "score": round(barrier), "hint": "устойчивость"},
+        {"id": "fine_lines", "label": "Морщинки", "score": round(fine_lines), "hint": "мелкие линии"},
+        {"id": "barrier", "label": "Барьер кожи", "score": round(barrier), "hint": "защита"},
     ]
 
     tip = {
