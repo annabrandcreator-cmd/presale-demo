@@ -1,0 +1,4 @@
+Flask>=3.0
+weasyprint>=60
+reportlab>=4.0
+gunicorn>=21

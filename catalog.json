@@ -1,0 +1,244 @@
+{
+  "brand": {
+    "name": "Производитель промышленной вентиляции",
+    "tagline": "Демо-каталог для кейса «ИИ-инженер по продажам»",
+    "demo_note": "Условные данные для портфолио. Не является публичной офертой.",
+    "phone": "—",
+    "email": "demo@example.local",
+    "inn": "0000000000"
+  },
+  "object_types": {
+    "production": {
+      "label": "Производственный цех",
+      "air_changes": 6,
+      "default_filter": "G4"
+    },
+    "warehouse": {
+      "label": "Склад / логистика",
+      "air_changes": 3,
+      "default_filter": "G3"
+    },
+    "cleanroom": {
+      "label": "Чистое помещение",
+      "air_changes": 15,
+      "default_filter": "H13"
+    },
+    "food": {
+      "label": "Пищевое производство",
+      "air_changes": 10,
+      "default_filter": "F7"
+    },
+    "office": {
+      "label": "Офис / административное здание",
+      "air_changes": 2.5,
+      "default_filter": "G4"
+    }
+  },
+  "products": [
+    {
+      "id": "pvu-5000",
+      "category": "ПВУ",
+      "name": "Приточно-вытяжная установка ПА-5000",
+      "flow_m3h_min": 3000,
+      "flow_m3h_max": 5500,
+      "temp_min": -25,
+      "temp_max": 40,
+      "filter_classes": ["G3", "G4", "F5"],
+      "price_rub": 485000,
+      "lead_days": 14,
+      "specs": "Роторный рекуператор 75%, корпус оцинкованная сталь, автоматика Danfoss"
+    },
+    {
+      "id": "pvu-12000",
+      "category": "ПВУ",
+      "name": "Приточно-вытяжная установка ПА-12000",
+      "flow_m3h_min": 8000,
+      "flow_m3h_max": 14000,
+      "temp_min": -30,
+      "temp_max": 45,
+      "filter_classes": ["G3", "G4", "F5", "F7"],
+      "price_rub": 920000,
+      "lead_days": 21,
+      "specs": "Пластинчатый рекуператор 68%, шум ≤ 62 дБ, встроенный ЧРП"
+    },
+    {
+      "id": "pvu-25000",
+      "category": "ПВУ",
+      "name": "Приточно-вытяжная установка ПА-25000",
+      "flow_m3h_min": 18000,
+      "flow_m3h_max": 28000,
+      "temp_min": -35,
+      "temp_max": 50,
+      "filter_classes": ["G4", "F5", "F7", "H13"],
+      "price_rub": 1680000,
+      "lead_days": 28,
+      "specs": "Модульная секционная конструкция, рекуператор 80%, удалённый пульт"
+    },
+    {
+      "id": "fan-ax-3200",
+      "category": "Вентилятор",
+      "name": "Осевой вентилятор ОВ-3200",
+      "flow_m3h_min": 2000,
+      "flow_m3h_max": 3800,
+      "temp_min": -20,
+      "temp_max": 60,
+      "filter_classes": [],
+      "price_rub": 78000,
+      "lead_days": 7,
+      "specs": "Коррозионностойкое исполнение, IP55, подшипники SKF"
+    },
+    {
+      "id": "fan-rad-8000",
+      "category": "Вентилятор",
+      "name": "Радиальный вентилятор РВ-8000",
+      "flow_m3h_min": 5000,
+      "flow_m3h_max": 9500,
+      "temp_min": -25,
+      "temp_max": 80,
+      "filter_classes": [],
+      "price_rub": 145000,
+      "lead_days": 10,
+      "specs": "Взрывозащищённое исполнение Ex d IIB T3 (опция)"
+    },
+    {
+      "id": "filter-g4",
+      "category": "Фильтр",
+      "name": "Кассетный фильтр класса G4 (комплект)",
+      "flow_m3h_min": 0,
+      "flow_m3h_max": 999999,
+      "temp_min": -30,
+      "temp_max": 70,
+      "filter_classes": ["G4"],
+      "price_rub": 12500,
+      "lead_days": 3,
+      "specs": "Синтетический материал, карманный тип, 592×592×600 мм"
+    },
+    {
+      "id": "filter-f7",
+      "category": "Фильтр",
+      "name": "Фильтр тонкой очистки F7 (комплект)",
+      "flow_m3h_min": 0,
+      "flow_m3h_max": 999999,
+      "temp_min": -10,
+      "temp_max": 60,
+      "filter_classes": ["F7"],
+      "price_rub": 28000,
+      "lead_days": 5,
+      "specs": "Для пищевого и фармацевтического производства"
+    },
+    {
+      "id": "filter-h13",
+      "category": "Фильтр",
+      "name": "HEPA-фильтр H13 (комплект)",
+      "flow_m3h_min": 0,
+      "flow_m3h_max": 999999,
+      "temp_min": 0,
+      "temp_max": 50,
+      "filter_classes": ["H13"],
+      "price_rub": 95000,
+      "lead_days": 14,
+      "specs": "Эффективность 99.95%, для чистых помещений ISO 7–8"
+    },
+    {
+      "id": "silencer-400",
+      "category": "Шумоглушитель",
+      "name": "Шумоглушитель ШГ-400",
+      "flow_m3h_min": 1000,
+      "flow_m3h_max": 6000,
+      "temp_min": -30,
+      "temp_max": 80,
+      "filter_classes": [],
+      "price_rub": 34000,
+      "lead_days": 7,
+      "specs": "Снижение шума до 18 дБ, оцинкованный корпус Ø400"
+    },
+    {
+      "id": "duct-kit",
+      "category": "Воздуховоды",
+      "name": "Комплект воздуховодов (расчётный)",
+      "flow_m3h_min": 0,
+      "flow_m3h_max": 999999,
+      "temp_min": -40,
+      "temp_max": 120,
+      "filter_classes": [],
+      "price_per_m3h": 8.5,
+      "lead_days": 12,
+      "specs": "Оцинкованная сталь, фасонные элементы, крепёж"
+    },
+    {
+      "id": "automation",
+      "category": "Автоматика",
+      "name": "Блок автоматики и диспетчеризации",
+      "flow_m3h_min": 0,
+      "flow_m3h_max": 999999,
+      "temp_min": -40,
+      "temp_max": 60,
+      "filter_classes": [],
+      "price_rub": 62000,
+      "lead_days": 5,
+      "specs": "Modbus RTU, датчики T/CO2/влажности, удалённый мониторинг"
+    },
+    {
+      "id": "install",
+      "category": "Монтаж",
+      "name": "Монтаж и пусконаладка (ориентир)",
+      "flow_m3h_min": 0,
+      "flow_m3h_max": 999999,
+      "temp_min": -40,
+      "temp_max": 60,
+      "filter_classes": [],
+      "price_percent_of_equipment": 0.12,
+      "lead_days": 10,
+      "specs": "Выезд бригады, шефмонтаж, акт ввода в эксплуатацию"
+    }
+  ],
+  "questions": [
+    {
+      "id": "object_type",
+      "text": "Какой тип объекта нужно вентилировать?",
+      "type": "choice",
+      "options_from": "object_types"
+    },
+    {
+      "id": "area_m2",
+      "text": "Площадь помещения, м²",
+      "type": "number",
+      "min": 50,
+      "max": 50000,
+      "placeholder": "например, 1200"
+    },
+    {
+      "id": "height_m",
+      "text": "Высота потолков, м",
+      "type": "number",
+      "min": 2.5,
+      "max": 30,
+      "placeholder": "например, 6"
+    },
+    {
+      "id": "temp_outdoor",
+      "text": "Минимальная температура наружного воздуха в регионе, °C",
+      "type": "number",
+      "min": -50,
+      "max": 10,
+      "placeholder": "например, -28"
+    },
+    {
+      "id": "filter_class",
+      "text": "Требуемый класс фильтрации",
+      "type": "choice",
+      "options": [
+        { "value": "G3", "label": "G3 — грубая очистка" },
+        { "value": "G4", "label": "G4 — стандарт производства" },
+        { "value": "F7", "label": "F7 — пищевое / фарма" },
+        { "value": "H13", "label": "H13 — чистые помещения" }
+      ]
+    },
+    {
+      "id": "contact_name",
+      "text": "Как к вам обращаться?",
+      "type": "text",
+      "placeholder": "Имя или компания"
+    }
+  ]
+}

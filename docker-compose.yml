@@ -1,0 +1,15 @@
+services:
+  demo:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      TEST_MODE: "1"
+      DEMO_DELAY_SEC: "0.8"
+      DB_PATH: /data/deals.db
+      KP_DIR: /data/kp
+    volumes:
+      - demo-data:/data
+
+volumes:
+  demo-data:
