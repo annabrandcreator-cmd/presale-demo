@@ -15,6 +15,7 @@ from flask import Flask, jsonify, request, send_from_directory, send_file, abort
 
 import engine
 import generate_kp
+from cosmetic_api import cosmetic_bp
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB = os.environ.get("DB_PATH") or os.path.join(APP_DIR, "deals.db")
@@ -26,6 +27,7 @@ DEMO_DELAY_SEC = float(os.environ.get("DEMO_DELAY_SEC", "1.2"))
 TEST_MODE = os.environ.get("TEST_MODE", "1") == "1"
 
 app = Flask(__name__, static_folder=STATIC, static_url_path="/static")
+app.register_blueprint(cosmetic_bp, url_prefix="/cosmetic")
 CATALOG = engine.load_catalog()
 
 ALLOWED_ORIGINS = {

@@ -1,0 +1,229 @@
+{
+  "brand": {
+    "name": "Auréa Skin",
+    "tagline": "Персональный уход за кожей",
+    "legal": "Демо-бренд. Реальная компания не используется."
+  },
+  "promo": {
+    "code": "FIRST5",
+    "discount_percent": 5,
+    "label": "5% на первую покупку по подбору консультанта"
+  },
+  "questions": [
+    {
+      "id": "primary_concern",
+      "text": "Какую задачу для кожи хотите решить в первую очередь?",
+      "type": "choice",
+      "options": [
+        { "value": "lifting", "label": "Лифтинг и упругость" },
+        { "value": "pores", "label": "Сужение пор и матовость" },
+        { "value": "aging", "label": "Возрастные изменения" },
+        { "value": "dryness", "label": "Сухость и обезвоженность" },
+        { "value": "dullness", "label": "Тусклость и неровный тон" },
+        { "value": "sensitivity", "label": "Чувствительность и покраснения" },
+        { "value": "acne", "label": "Высыпания и постакне" }
+      ]
+    },
+    {
+      "id": "skin_type",
+      "text": "Какой у вас тип кожи?",
+      "type": "choice",
+      "options": [
+        { "value": "dry", "label": "Сухая" },
+        { "value": "oily", "label": "Жирная" },
+        { "value": "combination", "label": "Комбинированная" },
+        { "value": "normal", "label": "Нормальная" },
+        { "value": "sensitive", "label": "Чувствительная" }
+      ]
+    },
+    {
+      "id": "age_range",
+      "text": "Ваш возрастной диапазон?",
+      "type": "choice",
+      "options": [
+        { "value": "18_25", "label": "18–25" },
+        { "value": "26_35", "label": "26–35" },
+        { "value": "36_45", "label": "36–45" },
+        { "value": "46_plus", "label": "46+" }
+      ]
+    },
+    {
+      "id": "routine_level",
+      "text": "Насколько развит ваш текущий уход?",
+      "type": "choice",
+      "options": [
+        { "value": "minimal", "label": "Минимальный — умывание и крем" },
+        { "value": "basic", "label": "Базовый — очищение, тоник, крем" },
+        { "value": "advanced", "label": "Расширенный — сыворотки, SPF, маски" }
+      ]
+    },
+    {
+      "id": "budget",
+      "text": "Какой бюджет на персональный набор комфортен?",
+      "type": "choice",
+      "options": [
+        { "value": "economy", "label": "До 4 000 ₽" },
+        { "value": "mid", "label": "4 000–8 000 ₽" },
+        { "value": "premium", "label": "От 8 000 ₽" }
+      ]
+    },
+    {
+      "id": "contact_name",
+      "text": "Как к вам обращаться? (для персонального предложения)",
+      "type": "text",
+      "placeholder": "Имя"
+    }
+  ],
+  "products": [
+    {
+      "id": "gel-cleanse",
+      "name": "Мягкий гель для умывания Hydra Calm",
+      "category": "cleanser",
+      "price_rub": 1290,
+      "tier": "economy",
+      "concerns": ["dryness", "sensitivity", "dullness"],
+      "skin_types": ["dry", "sensitive", "normal", "combination"],
+      "benefit": "Деликатно очищает без стянутости"
+    },
+    {
+      "id": "foam-cleanse",
+      "name": "Пенка для жирной кожи Pore Balance",
+      "category": "cleanser",
+      "price_rub": 1190,
+      "tier": "economy",
+      "concerns": ["pores", "acne", "dullness"],
+      "skin_types": ["oily", "combination"],
+      "benefit": "Матирует и очищает поры"
+    },
+    {
+      "id": "toner-hydra",
+      "name": "Увлажняющий тоник Rose Dew",
+      "category": "toner",
+      "price_rub": 1490,
+      "tier": "mid",
+      "concerns": ["dryness", "dullness", "sensitivity"],
+      "skin_types": ["dry", "normal", "sensitive", "combination"],
+      "benefit": "Восстанавливает pH и увлажняет"
+    },
+    {
+      "id": "toner-pore",
+      "name": "Тоник-эксфолиант Pore Refine",
+      "category": "toner",
+      "price_rub": 1590,
+      "tier": "mid",
+      "concerns": ["pores", "acne", "dullness"],
+      "skin_types": ["oily", "combination", "normal"],
+      "benefit": "Сужает поры и выравнивает текстуру"
+    },
+    {
+      "id": "serum-lift",
+      "name": "Сыворотка-лифтинг Peptide Lift",
+      "category": "serum",
+      "price_rub": 3490,
+      "tier": "premium",
+      "concerns": ["lifting", "aging"],
+      "skin_types": ["dry", "normal", "combination"],
+      "benefit": "Пептиды и ниацинамид для упругости"
+    },
+    {
+      "id": "serum-retinol",
+      "name": "Ночная сыворотка Retinol Smooth",
+      "category": "serum",
+      "price_rub": 3290,
+      "tier": "premium",
+      "concerns": ["aging", "pores", "dullness"],
+      "skin_types": ["normal", "combination", "oily"],
+      "benefit": "Ретинол 0,3% для обновления кожи"
+    },
+    {
+      "id": "serum-vitc",
+      "name": "Сыворотка с витамином C Glow 15%",
+      "category": "serum",
+      "price_rub": 2790,
+      "tier": "mid",
+      "concerns": ["dullness", "aging", "pores"],
+      "skin_types": ["normal", "combination", "oily", "dry"],
+      "benefit": "Осветляет и защищает от окисления"
+    },
+    {
+      "id": "serum-calm",
+      "name": "Успокаивающая сыворотка Centella Repair",
+      "category": "serum",
+      "price_rub": 2490,
+      "tier": "mid",
+      "concerns": ["sensitivity", "dryness", "acne"],
+      "skin_types": ["sensitive", "dry", "combination"],
+      "benefit": "Снимает покраснения и укрепляет барьер"
+    },
+    {
+      "id": "serum-acne",
+      "name": "Сыворотка против несовершенств Blemish Control",
+      "category": "serum",
+      "price_rub": 2290,
+      "tier": "mid",
+      "concerns": ["acne", "pores"],
+      "skin_types": ["oily", "combination"],
+      "benefit": "Салициловая кислота и цинк"
+    },
+    {
+      "id": "cream-hydra",
+      "name": "Крем-увлажнение Barrier Rich",
+      "category": "cream",
+      "price_rub": 2190,
+      "tier": "mid",
+      "concerns": ["dryness", "sensitivity"],
+      "skin_types": ["dry", "sensitive", "normal"],
+      "benefit": "Церамиды и сквалан на 24 часа"
+    },
+    {
+      "id": "cream-antiage",
+      "name": "Дневной крем Anti-Age Firm",
+      "category": "cream",
+      "price_rub": 3890,
+      "tier": "premium",
+      "concerns": ["aging", "lifting", "dryness"],
+      "skin_types": ["dry", "normal", "combination"],
+      "benefit": "SPF 15 и пептидный комплекс"
+    },
+    {
+      "id": "cream-light",
+      "name": "Лёгкий флюид Oil-Free Matte",
+      "category": "cream",
+      "price_rub": 1990,
+      "tier": "economy",
+      "concerns": ["pores", "acne", "dullness"],
+      "skin_types": ["oily", "combination"],
+      "benefit": "Матовый финиш без жирного блеска"
+    },
+    {
+      "id": "eye-lift",
+      "name": "Крем для век Eye Lift",
+      "category": "eye",
+      "price_rub": 2690,
+      "tier": "premium",
+      "concerns": ["lifting", "aging"],
+      "skin_types": ["dry", "normal", "combination", "sensitive"],
+      "benefit": "Работает с мимическими морщинами"
+    },
+    {
+      "id": "spf-daily",
+      "name": "Солнцезащитный флюид SPF 50 Daily Shield",
+      "category": "spf",
+      "price_rub": 1890,
+      "tier": "mid",
+      "concerns": ["aging", "dullness", "sensitivity"],
+      "skin_types": ["dry", "normal", "combination", "oily", "sensitive"],
+      "benefit": "Лёгкая текстура, без белых разводов"
+    },
+    {
+      "id": "mask-glow",
+      "name": "Маска-пилинг Glow Enzyme",
+      "category": "mask",
+      "price_rub": 1590,
+      "tier": "economy",
+      "concerns": ["dullness", "pores"],
+      "skin_types": ["normal", "combination", "oily"],
+      "benefit": "Энзимное обновление 1–2 раза в неделю"
+    }
+  ]
+}
