@@ -11,6 +11,15 @@
   },
   "questions": [
     {
+      "id": "photo_choice",
+      "text": "Хотите точнее? Можно загрузить фото кожи — я сделаю экспресс-анализ и учту его в подборе.",
+      "type": "choice",
+      "options": [
+        { "value": "upload", "label": "Сфотографировать / загрузить" },
+        { "value": "skip", "label": "Продолжить без фото" }
+      ]
+    },
+    {
       "id": "primary_concern",
       "text": "Какую задачу для кожи хотите решить в первую очередь?",
       "type": "choice",
@@ -48,6 +57,38 @@
       ]
     },
     {
+      "id": "acid_tolerance",
+      "text": "Как кожа обычно реагирует на кислоты (AHA/BHA) или сильные активы?",
+      "type": "choice",
+      "when": { "primary_concern": ["sensitivity", "dryness", "acne"] },
+      "options": [
+        { "value": "low", "label": "Легко раздражается — лучше мягко" },
+        { "value": "medium", "label": "Нормально, если не переборщить" },
+        { "value": "high", "label": "Хорошо переносит активный уход" }
+      ]
+    },
+    {
+      "id": "retinoid_experience",
+      "text": "Использовали ли ретинол или ретиноиды раньше?",
+      "type": "choice",
+      "when": { "primary_concern": ["aging", "lifting", "pores"] },
+      "options": [
+        { "value": "none", "label": "Нет, пока не пробовала" },
+        { "value": "beginner", "label": "Пробовала осторожно" },
+        { "value": "regular", "label": "Да, уже в рутине" }
+      ]
+    },
+    {
+      "id": "pregnancy",
+      "text": "Есть ли ограничения: беременность или кормление?",
+      "type": "choice",
+      "when": { "primary_concern": ["acne", "aging"] },
+      "options": [
+        { "value": "no", "label": "Нет" },
+        { "value": "yes", "label": "Да — учесть в подборе" }
+      ]
+    },
+    {
       "id": "routine_level",
       "text": "Насколько развит ваш текущий уход?",
       "type": "choice",
@@ -69,7 +110,7 @@
     },
     {
       "id": "contact_name",
-      "text": "Как к вам обращаться? (для персонального предложения)",
+      "text": "Как к вам обращаться?",
       "type": "text",
       "placeholder": "Имя"
     }

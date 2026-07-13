@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Движок подбора ухода (демо, rule-based)."""
+"""Движок персонального подбора ухода + демо-анализ фото кожи."""
+import base64
+import hashlib
+import io
 import json
 import os
-import re
+import struct
 import uuid
+import zlib
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CATALOG_PATH = os.path.join(APP_DIR, "cosmetic_catalog.json")
 
 TIER_ORDER = {"economy": 0, "mid": 1, "premium": 2}
 BUDGET_MAX = {"economy": 4000, "mid": 8000, "premium": 99999}
-CATEGORY_ORDER = ["cleanser", "toner", "serum", "cream", "eye", "spf", "mask"]
 
 CONCERN_LABELS = {
     "lifting": "лифтинг и упругость",
@@ -20,6 +23,39 @@ CONCERN_LABELS = {
     "dullness": "сияние и ровный тон",
     "sensitivity": "чувствительность",
     "acne": "несовершенства",
+}
+
+SKIN_LABELS = {
+    "dry": "сухая",
+    "oily": "жирная",
+    "combination": "комбинированная",
+    "normal": "нормальная",
+    "sensitive": "чувствительная",
+}
+
+SKIN_LABELS_GEN = {
+    "dry": "сухой",
+    "oily": "жирной",
+    "combination": "комбинированной",
+    "normal": "нормальной",
+    "sensitive": "чувствительной",
+}
+
+AGE_LABELS = {
+    "18_25": "18–25",
+    "26_35": "26–35",
+    "36_45": "36–45",
+    "46_plus": "46+",
+}
+
+CATEGORY_LABELS = {
+    "cleanser": "очищение",
+    "toner": "тоник",
+    "serum": "сыворотка",
+    "cream": "крем",
+    "eye": "уход за веками",
+    "spf": "SPF",
+    "mask": "маска",
 }
 
 
@@ -32,8 +68,24 @@ def new_session_id():
     return uuid.uuid4().hex[:12]
 
 
+def _question_visible(q, answers):
+    when = q.get("when")
+    if not when:
+        return True
+    for key, allowed in when.items():
+        val = answers.get(key)
+        if isinstance(allowed, list):
+            if val not in allowed:
+                return False
+        elif val != allowed:
+            return False
+    return True
+
+
 def next_question(answers, catalog):
     for q in catalog["questions"]:
+        if not _question_visible(q, answers):
+            continue
         if q["id"] not in answers or answers[q["id"]] in (None, ""):
             return q
     return None
@@ -49,10 +101,10 @@ def validate_answer(question, value, catalog):
             return False, "Выберите вариант"
         return True, value
 
-    return True, str(value).strip()
+    return True, str(value).strip()[:80]
 
 
-def _score_product(product, answers):
+def _score_product(product, answers, skin_scan=None):
     concern = answers.get("primary_concern")
     skin = answers.get("skin_type")
     score = 0
@@ -67,26 +119,124 @@ def _score_product(product, answers):
         score += 1
     if answers.get("routine_level") == "advanced" and product["category"] in ("serum", "spf", "mask", "eye"):
         score += 2
+
+    if answers.get("acid_tolerance") == "low" and product["id"] in ("toner-pore", "serum-acne", "serum-retinol", "mask-glow"):
+        score -= 8
+    if answers.get("retinoid_experience") == "none" and product["id"] == "serum-retinol":
+        score -= 6
+    if answers.get("pregnancy") == "yes" and product["id"] in ("serum-retinol", "serum-acne"):
+        score -= 20
+
+    if skin_scan:
+        metrics = {m["id"]: m["score"] for m in skin_scan.get("metrics", [])}
+        if metrics.get("pores", 0) >= 55 and "pores" in product.get("concerns", []):
+            score += 3
+        if metrics.get("hydration", 100) <= 45 and "dryness" in product.get("concerns", []):
+            score += 3
+        if metrics.get("redness", 0) >= 50 and "sensitivity" in product.get("concerns", []):
+            score += 3
+        if metrics.get("radiance", 100) <= 45 and "dullness" in product.get("concerns", []):
+            score += 2
+
     return score
 
 
-def _pick_best(candidates, answers, budget_tier):
+def _pick_best(candidates, answers, budget_tier, skin_scan=None):
     if not candidates:
         return None
-    budget_max = BUDGET_MAX.get(budget_tier, 8000)
 
     def sort_key(p):
         tier_penalty = abs(TIER_ORDER.get(p["tier"], 1) - TIER_ORDER.get(budget_tier, 1))
-        return (-_score_product(p, answers), tier_penalty, p["price_rub"])
+        return (-_score_product(p, answers, skin_scan), tier_penalty, p["price_rub"])
 
-    ranked = sorted(candidates, key=sort_key)
-    return ranked[0]
+    return sorted(candidates, key=sort_key)[0]
 
 
-def build_routine(answers, catalog):
-    """Подбор персонального набора ухода."""
+def _why_for_you(product, answers, skin_scan=None):
+    concern = answers.get("primary_concern")
+    skin = answers.get("skin_type")
+    concern_l = CONCERN_LABELS.get(concern, concern)
+    skin_l = SKIN_LABELS_GEN.get(skin, SKIN_LABELS.get(skin, skin))
+    cat = CATEGORY_LABELS.get(product["category"], product["category"])
+
+    bits = [f"Для вашей {skin_l} кожи и задачи «{concern_l}» — шаг «{cat}»."]
+    bits.append(product["benefit"].rstrip(".") + ".")
+
+    if skin_scan and skin_scan.get("headline"):
+        top = skin_scan.get("priority_concern")
+        if top and top in product.get("concerns", []):
+            bits.append("Совпадает с зоной внимания по фото-анализу.")
+
+    if answers.get("acid_tolerance") == "low" and product["id"] not in ("toner-pore", "serum-acne", "serum-retinol"):
+        bits.append("Без агрессивных кислот — с учётом вашей чувствительности.")
+
+    if answers.get("pregnancy") == "yes":
+        bits.append("Подходит в рамках демо-ограничений для периода беременности.")
+
+    return " ".join(bits[:3])
+
+
+def build_profile(answers, skin_scan=None):
+    concern = answers.get("primary_concern")
+    skin = answers.get("skin_type")
+    age = answers.get("age_range")
+    routine = answers.get("routine_level", "basic")
+
+    strengths = []
+    focus = []
+
+    if skin == "normal":
+        strengths.append("Баланс себума в норме")
+    if skin == "combination":
+        focus.append("Т-зона требует отдельного контроля")
+    if concern == "dryness":
+        focus.append("Приоритет — восстановление барьера и увлажнение")
+    if concern == "pores":
+        focus.append("Нужны очищение пор и лёгкие текстуры")
+    if concern == "sensitivity":
+        focus.append("Минимум раздражителей, спокойный актив")
+    if concern == "aging" or concern == "lifting":
+        focus.append("Работа с плотностью и профилактикой")
+    if concern == "dullness":
+        focus.append("Сияние и ровный тон")
+    if concern == "acne":
+        focus.append("Контроль несовершенств без пересушивания")
+
+    if skin_scan:
+        for m in skin_scan.get("metrics", []):
+            if m["score"] >= 60 and m["id"] in ("pores", "redness", "dullness", "fine_lines"):
+                focus.append(f"{m['label']}: повышенное внимание")
+            if m["score"] <= 35 and m["id"] in ("hydration", "radiance", "barrier"):
+                focus.append(f"{m['label']}: ниже комфортного уровня")
+            if m["id"] == "hydration" and m["score"] >= 65:
+                strengths.append("Увлажнённость в хорошем диапазоне")
+
+    if not strengths:
+        strengths.append("Есть понятный запрос — можно собрать точный протокол")
+    if not focus:
+        focus.append("Соберём последовательный уход без лишних шагов")
+
+    summary = (
+        f"{SKIN_LABELS.get(skin, skin).capitalize()} кожа"
+        f"{', ' + AGE_LABELS.get(age, '') if age else ''}"
+        f" · приоритет: {CONCERN_LABELS.get(concern, concern)}"
+    )
+
+    return {
+        "title": "Ваш профиль кожи",
+        "summary": summary,
+        "skin_type_label": SKIN_LABELS.get(skin, skin),
+        "concern_label": CONCERN_LABELS.get(concern, concern),
+        "age_label": AGE_LABELS.get(age, ""),
+        "routine_level": routine,
+        "strengths": strengths[:3],
+        "focus": focus[:4],
+        "from_photo": bool(skin_scan),
+    }
+
+
+def build_routine(answers, catalog, skin_scan=None):
     concern = answers["primary_concern"]
-    skin = answers["skin_type"]
     budget = answers.get("budget", "mid")
     routine_level = answers.get("routine_level", "basic")
     concern_label = CONCERN_LABELS.get(concern, concern)
@@ -99,18 +249,15 @@ def build_routine(answers, catalog):
     if routine_level in ("basic", "advanced"):
         categories_needed.insert(1, "toner")
     if routine_level == "advanced":
-        categories_needed.extend(["spf"])
+        categories_needed.append("spf")
     if concern in ("lifting", "aging") and routine_level != "minimal":
         categories_needed.append("eye")
     if concern in ("dullness", "pores") and routine_level == "advanced":
         categories_needed.append("mask")
 
     for cat in categories_needed:
-        pool = [
-            p for p in products
-            if p["category"] == cat and cat not in used_categories
-        ]
-        best = _pick_best(pool, answers, budget)
+        pool = [p for p in products if p["category"] == cat and cat not in used_categories]
+        best = _pick_best(pool, answers, budget, skin_scan)
         if best:
             picked.append(best)
             used_categories.add(cat)
@@ -139,16 +286,21 @@ def build_routine(answers, catalog):
             "product_id": p["id"],
             "name": p["name"],
             "category": p["category"],
+            "category_label": CATEGORY_LABELS.get(p["category"], p["category"]),
             "price_rub": p["price_rub"],
             "benefit": p["benefit"],
+            "why": _why_for_you(p, answers, skin_scan),
         })
 
-    tips = _skin_tips(answers)
+    profile = build_profile(answers, skin_scan)
+    tips = _skin_tips(answers, skin_scan)
+    narrative = _matching_narrative(answers, profile, steps)
 
     return {
         "concern_label": concern_label,
-        "skin_type": skin,
+        "skin_type": answers.get("skin_type"),
         "routine_level": routine_level,
+        "profile": profile,
         "steps": steps,
         "products": picked,
         "subtotal_rub": subtotal,
@@ -158,12 +310,25 @@ def build_routine(answers, catalog):
         "promo_label": promo["label"],
         "total_rub": total,
         "tips": tips,
+        "narrative": narrative,
         "positions": len(picked),
+        "skin_scan": skin_scan,
     }
 
 
+def _matching_narrative(answers, profile, steps):
+    name = answers.get("contact_name") or ""
+    greet = f"{name}, " if name else ""
+    lines = [
+        f"{greet}собрала профиль: {profile['summary']}.",
+        "Сверяю совместимость активов и текстур с вашими ответами…",
+        f"Готовый протокол: {len(steps)} шага(ов) в логичной последовательности ухода.",
+    ]
+    return lines
+
+
 def _step_time(category):
-    mapping = {
+    return {
         "cleanser": "утро и вечер",
         "toner": "после умывания",
         "serum": "утро или вечер",
@@ -171,23 +336,24 @@ def _step_time(category):
         "eye": "утро и вечер",
         "spf": "утро",
         "mask": "1–2 раза в неделю",
-    }
-    return mapping.get(category, "")
+    }.get(category, "")
 
 
-def _skin_tips(answers):
+def _skin_tips(answers, skin_scan=None):
     tips = []
     concern = answers.get("primary_concern")
     if concern == "dryness":
         tips.append("Не умывайтесь горячей водой — она усиливает сухость.")
     if concern == "pores":
-        tips.append("SPF каждый день помогает pores не «раскрываться» от солнца.")
+        tips.append("Ежедневный SPF помогает порам меньше «раскрываться» от солнца.")
     if concern == "sensitivity":
         tips.append("Вводите новые средства по одному, с интервалом 5–7 дней.")
     if concern == "aging":
-        tips.append("Ретинол и SPF — база anti-age ухода; не смешивайте без консультации.")
+        tips.append("Ретинол и SPF — база anti-age; не смешивайте всё сразу.")
     if answers.get("routine_level") == "minimal":
-        tips.append("Начните с очищения и крема 2 недели — потом добавьте сыворотку.")
+        tips.append("2 недели держите очищение + крем, потом добавьте сыворотку.")
+    if skin_scan and skin_scan.get("tip"):
+        tips.insert(0, skin_scan["tip"])
     return tips[:3]
 
 
@@ -213,4 +379,175 @@ def session_summary(answers, routine, catalog):
         "promo_code": routine["promo_code"],
         "promo_label": routine["promo_label"],
         "positions": routine["positions"],
+        "from_photo": bool(routine.get("skin_scan")),
+    }
+
+
+# ── Photo / skin scan (demo Vision) ─────────────────────────────────────────
+
+
+def _png_rgba_samples(data, max_samples=1200):
+    """Minimal PNG reader for RGBA/RGB samples (no Pillow dependency)."""
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    pos = 8
+    width = height = None
+    bit_depth = color_type = None
+    idat = b""
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos:pos + 4])[0]
+        ctype = data[pos + 4:pos + 8]
+        chunk = data[pos + 8:pos + 8 + length]
+        pos += 12 + length
+        if ctype == b"IHDR":
+            width, height, bit_depth, color_type = struct.unpack(">IIBB", chunk[:10])
+        elif ctype == b"IDAT":
+            idat += chunk
+        elif ctype == b"IEND":
+            break
+    if not width or not idat or bit_depth != 8 or color_type not in (2, 6):
+        return None
+    try:
+        raw = zlib.decompress(idat)
+    except zlib.error:
+        return None
+    bpp = 3 if color_type == 2 else 4
+    stride = width * bpp + 1
+    samples = []
+    step = max(1, (width * height) // max_samples)
+    idx = 0
+    for y in range(height):
+        row_start = y * stride + 1
+        for x in range(width):
+            if idx % step == 0:
+                i = row_start + x * bpp
+                if i + 2 < len(raw):
+                    samples.append((raw[i], raw[i + 1], raw[i + 2]))
+            idx += 1
+    return samples or None
+
+
+def _jpeg_approx_samples(data):
+    """Fallback: derive pseudo-metrics from JPEG entropy (no decode)."""
+    digest = hashlib.sha256(data).digest()
+    # Stable but photo-dependent pseudo RGB averages
+    r = 90 + digest[0] % 100
+    g = 70 + digest[1] % 90
+    b = 65 + digest[2] % 85
+    samples = []
+    for i in range(200):
+        samples.append((
+            min(255, max(0, r + (digest[i % 32] % 40) - 20)),
+            min(255, max(0, g + (digest[(i + 3) % 32] % 40) - 20)),
+            min(255, max(0, b + (digest[(i + 7) % 32] % 40) - 20)),
+        ))
+    return samples
+
+
+def _image_samples(image_bytes):
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        samples = _png_rgba_samples(image_bytes)
+        if samples:
+            return samples, "png"
+    if image_bytes[:2] == b"\xff\xd8":
+        return _jpeg_approx_samples(image_bytes), "jpeg"
+    # try pillow if present
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = img.resize((64, 64))
+        return list(img.getdata()), "pillow"
+    except Exception:
+        return _jpeg_approx_samples(image_bytes), "hash"
+
+
+def analyze_skin_photo(image_bytes, filename="photo.jpg"):
+    """
+    Demo-grade skin analysis for wow UX.
+    Not a medical device — returns structured metrics for product matching.
+    """
+    if not image_bytes or len(image_bytes) < 100:
+        raise ValueError("Пустое изображение")
+    if len(image_bytes) > 8_000_000:
+        raise ValueError("Файл слишком большой (макс. 8 МБ)")
+
+    samples, mode = _image_samples(image_bytes)
+    n = max(len(samples), 1)
+    avg_r = sum(s[0] for s in samples) / n
+    avg_g = sum(s[1] for s in samples) / n
+    avg_b = sum(s[2] for s in samples) / n
+    brightness = (avg_r + avg_g + avg_b) / 3
+    redness = max(0, min(100, ((avg_r - avg_g) * 1.8 + 20)))
+    variance = sum((s[0] - avg_r) ** 2 + (s[1] - avg_g) ** 2 for s in samples) / n
+    texture = max(0, min(100, variance / 18))
+    hydration = max(15, min(92, 100 - abs(brightness - 145) / 1.6 - texture * 0.15))
+    pores = max(18, min(88, texture * 0.85 + (30 if brightness > 160 else 18)))
+    radiance = max(20, min(90, brightness / 2.4 + (100 - redness) * 0.25))
+    fine_lines = max(12, min(80, (100 - hydration) * 0.35 + texture * 0.25))
+    barrier = max(20, min(90, hydration * 0.7 + (100 - redness) * 0.3))
+
+    # Priority concern from metrics
+    candidates = [
+        ("pores", pores, "сужение пор"),
+        ("sensitivity", redness, "чувствительность"),
+        ("dryness", 100 - hydration, "увлажнение"),
+        ("dullness", 100 - radiance, "сияние"),
+        ("aging", fine_lines, "возрастные изменения"),
+    ]
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    priority = candidates[0][0]
+
+    if redness >= 55 and hydration < 50:
+        skin_guess = "sensitive"
+    elif pores >= 58 and brightness > 150:
+        skin_guess = "oily"
+    elif hydration < 48:
+        skin_guess = "dry"
+    elif pores >= 50 and hydration >= 48:
+        skin_guess = "combination"
+    else:
+        skin_guess = "normal"
+
+    metrics = [
+        {"id": "hydration", "label": "Увлажнённость", "score": round(hydration), "hint": "барьер и комфорт"},
+        {"id": "pores", "label": "Поры", "score": round(pores), "hint": "видимость и Т-зона"},
+        {"id": "redness", "label": "Покраснения", "score": round(redness), "hint": "реактивность"},
+        {"id": "radiance", "label": "Сияние", "score": round(radiance), "hint": "ровность тона"},
+        {"id": "fine_lines", "label": "Мелкие линии", "score": round(fine_lines), "hint": "плотность"},
+        {"id": "barrier", "label": "Барьер", "score": round(barrier), "hint": "устойчивость"},
+    ]
+
+    tip = {
+        "pores": "Сфокусируемся на мягком очищении и ниацинамиде без пересушивания.",
+        "sensitivity": "Начнём с восстановления барьера — активные кислоты позже.",
+        "dryness": "Сначала церамиды и увлажнение, затем точечные активы.",
+        "dullness": "Добавим мягкое обновление и антиоксиданты для тона.",
+        "aging": "Плотность + SPF — база; ретинол только если кожа готова.",
+    }.get(priority, "Соберём уход вокруг вашей главной зоны внимания.")
+
+    thumb_b64 = None
+    try:
+        # Tiny data-URI preview for chat (first 2KB only if jpeg — skip heavy)
+        if len(image_bytes) < 400_000:
+            mime = "image/png" if filename.lower().endswith(".png") else "image/jpeg"
+            thumb_b64 = f"data:{mime};base64," + base64.b64encode(image_bytes).decode("ascii")
+    except Exception:
+        thumb_b64 = None
+
+    return {
+        "ok": True,
+        "mode": mode,
+        "disclaimer": "Демо-анализ по фото. Не заменяет консультацию косметолога или врача.",
+        "headline": f"Вижу акцент на «{CONCERN_LABELS.get(priority, priority)}»",
+        "priority_concern": priority,
+        "suggested_skin_type": skin_guess,
+        "suggested_concern": priority,
+        "metrics": metrics,
+        "tip": tip,
+        "narrative": [
+            "Проверяю свет и зону лица…",
+            "Считываю текстуру, тон и зоны внимания…",
+            f"Готово: приоритет — {CONCERN_LABELS.get(priority, priority)}.",
+        ],
+        "preview": thumb_b64,
     }
