@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """Движок персонального подбора ухода + демо-анализ фото кожи."""
-import base64
 import hashlib
 import io
 import json
@@ -176,6 +175,76 @@ def _why_for_you(product, answers, skin_scan=None):
     return " ".join(bits[:3])
 
 
+def _forecast_outcomes(answers, skin_scan=None):
+    """2/4-week demo forecasts tied to the client's primary concern."""
+    concern = answers.get("primary_concern") or "dryness"
+    templates = {
+        "lifting": {
+            "week2": "Кожа ощущается более плотной, контур — чуть собраннее",
+            "week4": "Видимый эффект лифтинга: упругость контура +{pct}%",
+            "base": 18,
+        },
+        "pores": {
+            "week2": "Поры выглядят чище, меньше сального блеска в Т-зоне",
+            "week4": "Визуальное сужение пор примерно на {pct}%",
+            "base": 16,
+        },
+        "aging": {
+            "week2": "Тон ровнее, кожа мягче на ощупь",
+            "week4": "Выраженность мелких морщин ниже примерно на {pct}%",
+            "base": 14,
+        },
+        "dryness": {
+            "week2": "Меньше стянутости, комфорт сохраняется дольше в течение дня",
+            "week4": "Уровень увлажнённости +{pct}%",
+            "base": 22,
+        },
+        "dullness": {
+            "week2": "Кожа выглядит свежее, тон визуально ровнее",
+            "week4": "Сияние и ровность тона +{pct}%",
+            "base": 17,
+        },
+        "sensitivity": {
+            "week2": "Меньше реакции на внешние раздражители",
+            "week4": "Снижение видимых покраснений примерно на {pct}%",
+            "base": 15,
+        },
+        "acne": {
+            "week2": "Меньше новых воспалений при регулярном уходе",
+            "week4": "Видимое снижение несовершенств примерно на {pct}%",
+            "base": 19,
+        },
+    }
+    item = templates.get(concern, templates["dryness"])
+    boost = 0
+    age = answers.get("age_range")
+    skin = answers.get("skin_type")
+    level = answers.get("routine_level")
+    if age in ("18_25", "26_35"):
+        boost += 2
+    if level == "advanced":
+        boost += 2
+    elif level != "minimal":
+        boost += 1
+    if skin in ("oily", "combination") and concern in ("pores", "acne", "dullness"):
+        boost += 2
+    if skin in ("dry", "sensitive") and concern in ("dryness", "sensitivity"):
+        boost += 2
+    if age in ("36_45", "46_plus") and concern in ("lifting", "aging"):
+        boost += 2
+    if skin_scan and skin_scan.get("priority_concern") == concern:
+        boost += 2
+    pct = max(12, min(item["base"] + boost, 28))
+    return {
+        "concern": concern,
+        "weeks": [
+            {"at": "Через 2 недели", "text": item["week2"]},
+            {"at": "Через 4 недели", "text": item["week4"].format(pct=pct), "percent": pct},
+        ],
+        "disclaimer": "Ориентир для демо при регулярном уходе. Не является медицинским прогнозом.",
+    }
+
+
 def build_profile(answers, skin_scan=None):
     concern = answers.get("primary_concern")
     skin = answers.get("skin_type")
@@ -295,6 +364,7 @@ def build_routine(answers, catalog, skin_scan=None):
     profile = build_profile(answers, skin_scan)
     tips = _skin_tips(answers, skin_scan)
     narrative = _matching_narrative(answers, profile, steps)
+    outcomes = _forecast_outcomes(answers, skin_scan)
 
     return {
         "concern_label": concern_label,
@@ -311,6 +381,7 @@ def build_routine(answers, catalog, skin_scan=None):
         "total_rub": total,
         "tips": tips,
         "narrative": narrative,
+        "outcomes": outcomes,
         "positions": len(picked),
         "skin_scan": skin_scan,
     }
@@ -525,19 +596,10 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         "aging": "Плотность + SPF — база; ретинол только если кожа готова.",
     }.get(priority, "Соберём уход вокруг вашей главной зоны внимания.")
 
-    thumb_b64 = None
-    try:
-        # Tiny data-URI preview for chat (first 2KB only if jpeg — skip heavy)
-        if len(image_bytes) < 400_000:
-            mime = "image/png" if filename.lower().endswith(".png") else "image/jpeg"
-            thumb_b64 = f"data:{mime};base64," + base64.b64encode(image_bytes).decode("ascii")
-    except Exception:
-        thumb_b64 = None
-
     return {
         "ok": True,
         "mode": mode,
-        "disclaimer": "Демо-анализ по фото. Не заменяет консультацию косметолога или врача.",
+        "disclaimer": "Демо-анализ по фото. Не заменяет консультацию косметолога или врача. Фото не сохраняется.",
         "headline": f"Вижу акцент на «{CONCERN_LABELS.get(priority, priority)}»",
         "priority_concern": priority,
         "suggested_skin_type": skin_guess,
@@ -549,5 +611,4 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
             "Считываю текстуру, тон и зоны внимания…",
             f"Готово: приоритет — {CONCERN_LABELS.get(priority, priority)}.",
         ],
-        "preview": thumb_b64,
     }

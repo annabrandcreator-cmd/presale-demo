@@ -12,11 +12,17 @@
   "questions": [
     {
       "id": "photo_choice",
-      "text": "Хотите точнее? Можно загрузить фото кожи — я сделаю экспресс-анализ и учту его в подборе.",
+      "text": "Можно загрузить фото кожи — я сделаю экспресс-анализ и учту его в подборе.",
       "type": "choice",
       "options": [
-        { "value": "upload", "label": "Сфотографировать / загрузить" },
-        { "value": "skip", "label": "Продолжить без фото" }
+        {
+          "value": "upload",
+          "label": "Сфотографировать / загрузить"
+        },
+        {
+          "value": "skip",
+          "label": "Продолжить без фото"
+        }
       ]
     },
     {
@@ -24,13 +30,34 @@
       "text": "Какую задачу для кожи хотите решить в первую очередь?",
       "type": "choice",
       "options": [
-        { "value": "lifting", "label": "Лифтинг и упругость" },
-        { "value": "pores", "label": "Сужение пор и матовость" },
-        { "value": "aging", "label": "Возрастные изменения" },
-        { "value": "dryness", "label": "Сухость и обезвоженность" },
-        { "value": "dullness", "label": "Тусклость и неровный тон" },
-        { "value": "sensitivity", "label": "Чувствительность и покраснения" },
-        { "value": "acne", "label": "Высыпания и постакне" }
+        {
+          "value": "lifting",
+          "label": "Лифтинг и упругость"
+        },
+        {
+          "value": "pores",
+          "label": "Сужение пор и матовость"
+        },
+        {
+          "value": "aging",
+          "label": "Возрастные изменения"
+        },
+        {
+          "value": "dryness",
+          "label": "Сухость и обезвоженность"
+        },
+        {
+          "value": "dullness",
+          "label": "Тусклость и неровный тон"
+        },
+        {
+          "value": "sensitivity",
+          "label": "Чувствительность и покраснения"
+        },
+        {
+          "value": "acne",
+          "label": "Высыпания и постакне"
+        }
       ]
     },
     {
@@ -38,11 +65,26 @@
       "text": "Какой у вас тип кожи?",
       "type": "choice",
       "options": [
-        { "value": "dry", "label": "Сухая" },
-        { "value": "oily", "label": "Жирная" },
-        { "value": "combination", "label": "Комбинированная" },
-        { "value": "normal", "label": "Нормальная" },
-        { "value": "sensitive", "label": "Чувствительная" }
+        {
+          "value": "dry",
+          "label": "Сухая"
+        },
+        {
+          "value": "oily",
+          "label": "Жирная"
+        },
+        {
+          "value": "combination",
+          "label": "Комбинированная"
+        },
+        {
+          "value": "normal",
+          "label": "Нормальная"
+        },
+        {
+          "value": "sensitive",
+          "label": "Чувствительная"
+        }
       ]
     },
     {
@@ -50,42 +92,95 @@
       "text": "Ваш возрастной диапазон?",
       "type": "choice",
       "options": [
-        { "value": "18_25", "label": "18–25" },
-        { "value": "26_35", "label": "26–35" },
-        { "value": "36_45", "label": "36–45" },
-        { "value": "46_plus", "label": "46+" }
+        {
+          "value": "18_25",
+          "label": "18–25"
+        },
+        {
+          "value": "26_35",
+          "label": "26–35"
+        },
+        {
+          "value": "36_45",
+          "label": "36–45"
+        },
+        {
+          "value": "46_plus",
+          "label": "46+"
+        }
       ]
     },
     {
       "id": "acid_tolerance",
       "text": "Как кожа обычно реагирует на кислоты (AHA/BHA) или сильные активы?",
       "type": "choice",
-      "when": { "primary_concern": ["sensitivity", "dryness", "acne"] },
+      "when": {
+        "primary_concern": [
+          "sensitivity",
+          "dryness",
+          "acne"
+        ]
+      },
       "options": [
-        { "value": "low", "label": "Легко раздражается — лучше мягко" },
-        { "value": "medium", "label": "Нормально, если не переборщить" },
-        { "value": "high", "label": "Хорошо переносит активный уход" }
+        {
+          "value": "low",
+          "label": "Легко раздражается — лучше мягко"
+        },
+        {
+          "value": "medium",
+          "label": "Нормально, если не переборщить"
+        },
+        {
+          "value": "high",
+          "label": "Хорошо переносит активный уход"
+        }
       ]
     },
     {
       "id": "retinoid_experience",
       "text": "Использовали ли ретинол или ретиноиды раньше?",
       "type": "choice",
-      "when": { "primary_concern": ["aging", "lifting", "pores"] },
+      "when": {
+        "primary_concern": [
+          "aging",
+          "lifting",
+          "pores"
+        ]
+      },
       "options": [
-        { "value": "none", "label": "Нет, пока не пробовала" },
-        { "value": "beginner", "label": "Пробовала осторожно" },
-        { "value": "regular", "label": "Да, уже в рутине" }
+        {
+          "value": "none",
+          "label": "Нет, пока не пробовала"
+        },
+        {
+          "value": "beginner",
+          "label": "Пробовала осторожно"
+        },
+        {
+          "value": "regular",
+          "label": "Да, уже в рутине"
+        }
       ]
     },
     {
       "id": "pregnancy",
       "text": "Есть ли ограничения: беременность или кормление?",
       "type": "choice",
-      "when": { "primary_concern": ["acne", "aging"] },
+      "when": {
+        "primary_concern": [
+          "acne",
+          "aging"
+        ]
+      },
       "options": [
-        { "value": "no", "label": "Нет" },
-        { "value": "yes", "label": "Да — учесть в подборе" }
+        {
+          "value": "no",
+          "label": "Нет"
+        },
+        {
+          "value": "yes",
+          "label": "Да — учесть в подборе"
+        }
       ]
     },
     {
@@ -93,9 +188,18 @@
       "text": "Насколько развит ваш текущий уход?",
       "type": "choice",
       "options": [
-        { "value": "minimal", "label": "Минимальный — умывание и крем" },
-        { "value": "basic", "label": "Базовый — очищение, тоник, крем" },
-        { "value": "advanced", "label": "Расширенный — сыворотки, SPF, маски" }
+        {
+          "value": "minimal",
+          "label": "Минимальный — умывание и крем"
+        },
+        {
+          "value": "basic",
+          "label": "Базовый — очищение, тоник, крем"
+        },
+        {
+          "value": "advanced",
+          "label": "Расширенный — сыворотки, SPF, маски"
+        }
       ]
     },
     {
@@ -103,9 +207,18 @@
       "text": "Какой бюджет на персональный набор комфортен?",
       "type": "choice",
       "options": [
-        { "value": "economy", "label": "До 4 000 ₽" },
-        { "value": "mid", "label": "4 000–8 000 ₽" },
-        { "value": "premium", "label": "От 8 000 ₽" }
+        {
+          "value": "economy",
+          "label": "До 4 000 ₽"
+        },
+        {
+          "value": "mid",
+          "label": "4 000–8 000 ₽"
+        },
+        {
+          "value": "premium",
+          "label": "От 8 000 ₽"
+        }
       ]
     },
     {
@@ -122,8 +235,17 @@
       "category": "cleanser",
       "price_rub": 1290,
       "tier": "economy",
-      "concerns": ["dryness", "sensitivity", "dullness"],
-      "skin_types": ["dry", "sensitive", "normal", "combination"],
+      "concerns": [
+        "dryness",
+        "sensitivity",
+        "dullness"
+      ],
+      "skin_types": [
+        "dry",
+        "sensitive",
+        "normal",
+        "combination"
+      ],
       "benefit": "Деликатно очищает без стянутости"
     },
     {
@@ -132,8 +254,15 @@
       "category": "cleanser",
       "price_rub": 1190,
       "tier": "economy",
-      "concerns": ["pores", "acne", "dullness"],
-      "skin_types": ["oily", "combination"],
+      "concerns": [
+        "pores",
+        "acne",
+        "dullness"
+      ],
+      "skin_types": [
+        "oily",
+        "combination"
+      ],
       "benefit": "Матирует и очищает поры"
     },
     {
@@ -142,8 +271,17 @@
       "category": "toner",
       "price_rub": 1490,
       "tier": "mid",
-      "concerns": ["dryness", "dullness", "sensitivity"],
-      "skin_types": ["dry", "normal", "sensitive", "combination"],
+      "concerns": [
+        "dryness",
+        "dullness",
+        "sensitivity"
+      ],
+      "skin_types": [
+        "dry",
+        "normal",
+        "sensitive",
+        "combination"
+      ],
       "benefit": "Восстанавливает pH и увлажняет"
     },
     {
@@ -152,8 +290,16 @@
       "category": "toner",
       "price_rub": 1590,
       "tier": "mid",
-      "concerns": ["pores", "acne", "dullness"],
-      "skin_types": ["oily", "combination", "normal"],
+      "concerns": [
+        "pores",
+        "acne",
+        "dullness"
+      ],
+      "skin_types": [
+        "oily",
+        "combination",
+        "normal"
+      ],
       "benefit": "Сужает поры и выравнивает текстуру"
     },
     {
@@ -162,8 +308,15 @@
       "category": "serum",
       "price_rub": 3490,
       "tier": "premium",
-      "concerns": ["lifting", "aging"],
-      "skin_types": ["dry", "normal", "combination"],
+      "concerns": [
+        "lifting",
+        "aging"
+      ],
+      "skin_types": [
+        "dry",
+        "normal",
+        "combination"
+      ],
       "benefit": "Пептиды и ниацинамид для упругости"
     },
     {
@@ -172,8 +325,16 @@
       "category": "serum",
       "price_rub": 3290,
       "tier": "premium",
-      "concerns": ["aging", "pores", "dullness"],
-      "skin_types": ["normal", "combination", "oily"],
+      "concerns": [
+        "aging",
+        "pores",
+        "dullness"
+      ],
+      "skin_types": [
+        "normal",
+        "combination",
+        "oily"
+      ],
       "benefit": "Ретинол 0,3% для обновления кожи"
     },
     {
@@ -182,8 +343,17 @@
       "category": "serum",
       "price_rub": 2790,
       "tier": "mid",
-      "concerns": ["dullness", "aging", "pores"],
-      "skin_types": ["normal", "combination", "oily", "dry"],
+      "concerns": [
+        "dullness",
+        "aging",
+        "pores"
+      ],
+      "skin_types": [
+        "normal",
+        "combination",
+        "oily",
+        "dry"
+      ],
       "benefit": "Осветляет и защищает от окисления"
     },
     {
@@ -192,8 +362,16 @@
       "category": "serum",
       "price_rub": 2490,
       "tier": "mid",
-      "concerns": ["sensitivity", "dryness", "acne"],
-      "skin_types": ["sensitive", "dry", "combination"],
+      "concerns": [
+        "sensitivity",
+        "dryness",
+        "acne"
+      ],
+      "skin_types": [
+        "sensitive",
+        "dry",
+        "combination"
+      ],
       "benefit": "Снимает покраснения и укрепляет барьер"
     },
     {
@@ -202,8 +380,14 @@
       "category": "serum",
       "price_rub": 2290,
       "tier": "mid",
-      "concerns": ["acne", "pores"],
-      "skin_types": ["oily", "combination"],
+      "concerns": [
+        "acne",
+        "pores"
+      ],
+      "skin_types": [
+        "oily",
+        "combination"
+      ],
       "benefit": "Салициловая кислота и цинк"
     },
     {
@@ -212,8 +396,15 @@
       "category": "cream",
       "price_rub": 2190,
       "tier": "mid",
-      "concerns": ["dryness", "sensitivity"],
-      "skin_types": ["dry", "sensitive", "normal"],
+      "concerns": [
+        "dryness",
+        "sensitivity"
+      ],
+      "skin_types": [
+        "dry",
+        "sensitive",
+        "normal"
+      ],
       "benefit": "Церамиды и сквалан на 24 часа"
     },
     {
@@ -222,8 +413,16 @@
       "category": "cream",
       "price_rub": 3890,
       "tier": "premium",
-      "concerns": ["aging", "lifting", "dryness"],
-      "skin_types": ["dry", "normal", "combination"],
+      "concerns": [
+        "aging",
+        "lifting",
+        "dryness"
+      ],
+      "skin_types": [
+        "dry",
+        "normal",
+        "combination"
+      ],
       "benefit": "SPF 15 и пептидный комплекс"
     },
     {
@@ -232,8 +431,15 @@
       "category": "cream",
       "price_rub": 1990,
       "tier": "economy",
-      "concerns": ["pores", "acne", "dullness"],
-      "skin_types": ["oily", "combination"],
+      "concerns": [
+        "pores",
+        "acne",
+        "dullness"
+      ],
+      "skin_types": [
+        "oily",
+        "combination"
+      ],
       "benefit": "Матовый финиш без жирного блеска"
     },
     {
@@ -242,8 +448,16 @@
       "category": "eye",
       "price_rub": 2690,
       "tier": "premium",
-      "concerns": ["lifting", "aging"],
-      "skin_types": ["dry", "normal", "combination", "sensitive"],
+      "concerns": [
+        "lifting",
+        "aging"
+      ],
+      "skin_types": [
+        "dry",
+        "normal",
+        "combination",
+        "sensitive"
+      ],
       "benefit": "Работает с мимическими морщинами"
     },
     {
@@ -252,8 +466,18 @@
       "category": "spf",
       "price_rub": 1890,
       "tier": "mid",
-      "concerns": ["aging", "dullness", "sensitivity"],
-      "skin_types": ["dry", "normal", "combination", "oily", "sensitive"],
+      "concerns": [
+        "aging",
+        "dullness",
+        "sensitivity"
+      ],
+      "skin_types": [
+        "dry",
+        "normal",
+        "combination",
+        "oily",
+        "sensitive"
+      ],
       "benefit": "Лёгкая текстура, без белых разводов"
     },
     {
@@ -262,8 +486,15 @@
       "category": "mask",
       "price_rub": 1590,
       "tier": "economy",
-      "concerns": ["dullness", "pores"],
-      "skin_types": ["normal", "combination", "oily"],
+      "concerns": [
+        "dullness",
+        "pores"
+      ],
+      "skin_types": [
+        "normal",
+        "combination",
+        "oily"
+      ],
       "benefit": "Энзимное обновление 1–2 раза в неделю"
     }
   ]

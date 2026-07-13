@@ -236,6 +236,7 @@ def api_photo(session_id):
 
     image_bytes = None
     filename = "photo.jpg"
+    consent = False
 
     if request.content_type and "multipart/form-data" in request.content_type:
         f = request.files.get("photo") or request.files.get("file")
@@ -243,6 +244,8 @@ def api_photo(session_id):
             return jsonify({"error": "photo required"}), 400
         image_bytes = f.read()
         filename = f.filename or filename
+        consent_raw = (request.form.get("consent") or "").strip().lower()
+        consent = consent_raw in ("1", "true", "yes", "on")
     else:
         data = request.get_json(silent=True) or {}
         b64 = data.get("image_base64") or data.get("photo")
@@ -255,6 +258,12 @@ def api_photo(session_id):
         except Exception:
             return jsonify({"error": "invalid base64"}), 400
         filename = data.get("filename") or filename
+        consent = bool(data.get("consent"))
+
+    if not consent:
+        return jsonify({
+            "error": "Нужно согласие: фото обрабатывается для демо-подбора и не сохраняется."
+        }), 400
 
     try:
         scan = engine.analyze_skin_photo(image_bytes, filename)
@@ -264,12 +273,16 @@ def api_photo(session_id):
         traceback.print_exc()
         return jsonify({"error": f"analyze failed: {e}"}), 500
 
-    scan_store = dict(scan)
-    if scan_store.get("preview") and len(scan_store["preview"]) > 120_000:
-        scan_store["preview"] = None
+    # Privacy: never persist the image — only anonymous metrics for matching.
+    scan_store = {k: v for k, v in scan.items() if k != "preview"}
+    scan_store.pop("preview", None)
+    # Drop any accidental binary-sized fields
+    image_bytes = None
 
     answers = json.loads(row["answers"])
     answers["photo_choice"] = "upload"
+    answers["photo_consent"] = True
+    answers["photo_not_stored"] = True
     if not answers.get("primary_concern"):
         answers["primary_concern"] = scan["suggested_concern"]
     if not answers.get("skin_type"):
@@ -284,4 +297,4 @@ def api_photo(session_id):
         error=None,
     )
     threading.Thread(target=process_session_async, args=(session_id,), daemon=True).start()
-    return jsonify({"ok": True, "skin_scan": scan, "answers": answers})
+    return jsonify({"ok": True, "skin_scan": scan_store, "answers": answers})
