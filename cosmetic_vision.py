@@ -428,6 +428,18 @@ def _face_frac(fx, fy, bbox):
     return (fx - x0) / max(1, x1 - x0), (fy - y0) / max(1, y1 - y0)
 
 
+def _bbox_skin_set(grid, bbox):
+    """Все пиксели кожи (и сильной красноты) внутри рамки лица — для ring-проверок."""
+    x0, y0, x1, y1 = bbox
+    out = set()
+    for y in range(y0, y1 + 1):
+        row = y * grid.w
+        for x in range(x0, x1 + 1):
+            if grid.skin[row + x] or _is_reddened_skin(*grid.px[row + x]):
+                out.add((x, y))
+    return out
+
+
 def _skin_ring_fraction(pts, skin_all, radius=2):
     """Доля соседних пикселей вокруг компоненты, которые тоже кожа."""
     pts_set = pts if isinstance(pts, set) else set(pts)
@@ -527,7 +539,7 @@ def _detect_red(grid, bbox, regions, base):
     findings = []
     region_pts = {rid: set(pts) for rid, pts in regions.items()}
     allowed = set().union(*region_pts.values()) if region_pts else set()
-    skin_all = set(allowed)
+    skin_all = _bbox_skin_set(grid, bbox)
 
     # Типичный красный тон самих губ (центр рта): чтобы отличать помаду и
     # уголки губ от настоящих воспалений рядом со ртом.
@@ -548,15 +560,25 @@ def _detect_red(grid, bbox, regions, base):
     }
     face_area = max(1, len(allowed))
     for pts in _components(anomaly, grid, min_area=3):
-        if _skin_ring_fraction(pts, skin_all) < 0.68:
+        area_frac_pre = len(pts) / face_area
+        ring = _skin_ring_fraction(pts, skin_all)
+        # компактные воспаления — мягче; разлитые пятна не должны обнимать край лица
+        if area_frac_pre < 0.012 and ring < 0.55:
+            continue
+        if area_frac_pre >= 0.012 and ring < 0.78:
             continue
         geom = _pick_interior_centroid(
             pts, bbox, skin_all,
             score_fn=lambda p: grid.rg[p[1] * grid.w + p[0]] - base["rg"],
+            min_local=0.70,
         )
         if not geom:
-            continue
-        cx, cy, bx0, by0, bx1, by1 = geom
+            cx, cy, bx0, by0, bx1, by1 = _comp_geometry(pts)
+            fx0, fy0 = _face_frac(cx, cy, bbox)
+            if fx0 < 0.18 or fx0 > 0.82 or _local_skin_frac(int(cx), int(cy), skin_all) < 0.6:
+                continue
+        else:
+            cx, cy, bx0, by0, bx1, by1 = geom
         fx, fy = _face_frac(cx, cy, bbox)
         rid, rlabel = _region_of(fx, fy)
         if not rid:
@@ -612,9 +634,7 @@ def _detect_diffuse_redness(grid, bbox, regions, base):
     Симметричная краснота обеих щёк — «сосудистая краснота» (не диагноз).
     """
     findings = []
-    skin_all = set()
-    for pts in regions.values():
-        skin_all.update(pts)
+    skin_all = _bbox_skin_set(grid, bbox)
     idx = {}
     for rid in ("left_cheek", "right_cheek", "nose"):
         pts = regions.get(rid) or []
@@ -732,9 +752,7 @@ def _detect_pigmentation(grid, bbox, regions, base):
     allowed = set()
     for rid in zone_ids:
         allowed.update(regions.get(rid) or [])
-    skin_all = set()
-    for pts in regions.values():
-        skin_all.update(pts)
+    skin_all = _bbox_skin_set(grid, bbox)
     anomaly = set()
     for x, y in allowed:
         i = y * grid.w + x
@@ -791,9 +809,7 @@ def _detect_pigmentation(grid, bbox, regions, base):
 def _detect_texture(grid, bbox, regions, base):
     """Расширенные поры / неровная текстура по микроконтрасту зоны."""
     findings = []
-    skin_all = set()
-    for pts in regions.values():
-        skin_all.update(pts)
+    skin_all = _bbox_skin_set(grid, bbox)
     for rid in ("nose", "left_cheek", "right_cheek", "chin", "forehead"):
         pts = regions.get(rid) or []
         if len(pts) < 40:
