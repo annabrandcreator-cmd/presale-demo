@@ -53,7 +53,16 @@ ALLOWED_ORIGINS = {
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin")
+    allow = False
     if origin and origin in ALLOWED_ORIGINS:
+        allow = True
+    elif origin and (
+        origin.startswith("http://localhost:")
+        or origin.startswith("http://127.0.0.1:")
+    ):
+        # Local static previews (any port) for redesign iteration
+        allow = True
+    if allow and origin:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
