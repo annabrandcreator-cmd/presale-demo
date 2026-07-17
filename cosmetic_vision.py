@@ -27,11 +27,13 @@ class PhotoQualityError(ValueError):
 _REGIONS = [
     ("forehead", "Лоб", 0.24, 0.13, 0.76, 0.32),
     ("glabella", "Межбровье", 0.41, 0.32, 0.59, 0.41),
-    ("left_under_eye", "Под глазом слева", 0.18, 0.54, 0.42, 0.66),
-    ("right_under_eye", "Под глазом справа", 0.58, 0.54, 0.82, 0.66),
+    # Под глазом: узкая полоса сразу под орбитой (не середина щеки)
+    ("left_under_eye", "Под глазом слева", 0.20, 0.48, 0.42, 0.58),
+    ("right_under_eye", "Под глазом справа", 0.58, 0.48, 0.80, 0.58),
     ("nose", "Нос", 0.41, 0.42, 0.59, 0.66),
-    ("left_nasolabial", "Носогубная зона слева", 0.26, 0.64, 0.38, 0.78),
-    ("right_nasolabial", "Носогубная зона справа", 0.62, 0.64, 0.74, 0.78),
+    # Носогубная складка: диагональ от крыла носа к уголку рта (не «яблоко» щеки)
+    ("left_nasolabial", "Носогубная зона слева", 0.28, 0.58, 0.43, 0.76),
+    ("right_nasolabial", "Носогубная зона справа", 0.57, 0.58, 0.72, 0.76),
     # Щёки: внутренний «яблоко» — не край силуэта и не челюсть.
     ("left_cheek", "Щека слева", 0.16, 0.52, 0.40, 0.74),
     ("right_cheek", "Щека справа", 0.60, 0.52, 0.84, 0.74),
@@ -591,18 +593,27 @@ def _detect_red(grid, bbox, regions, base):
         area_frac = len(pts) / face_area
         comp_w = bx1 - bx0 + 1
         comp_h = by1 - by0 + 1
+        compact = comp_w * comp_h <= len(pts) * 3.2
         # губы/помада: очень красные участки в нижней трети лица — не кожа
-        if fy > 0.60 and (excess > 80 or (excess > 50 and comp_w >= comp_h * 2.0)):
+        # компактные «прыщики» не отбрасываем — это как раз тестовые воспаления
+        is_compact_spot = area_frac < 0.01 and compact
+        if (not is_compact_spot) and fy > 0.60 and (
+            excess > 80 or (excess > 50 and comp_w >= comp_h * 2.0)
+        ):
             continue
         # уголки губ/края помады: красный элемент около рта с тоном как у губ
         comp_rg = sum(grid.rg[y * grid.w + x] for x, y in pts) / len(pts)
         near_mouth = 0.24 < fx < 0.76 and 0.66 < fy < 0.98
-        if near_mouth and lip_rg is not None and abs(comp_rg - lip_rg) < 28:
+        if (
+            (not is_compact_spot)
+            and near_mouth
+            and lip_rg is not None
+            and abs(comp_rg - lip_rg) < 28
+        ):
             continue
-        compact = comp_w * comp_h <= len(pts) * 3.2
         strength = min(1.0, (excess - 21) / 34.0 + area_frac * 4.0)
         conf = min(0.95, 0.5 + (excess - 21) / 55.0 + min(0.12, area_frac * 8))
-        ftype = "inflammation" if (area_frac < 0.01 and compact) else "redness"
+        ftype = "inflammation" if is_compact_spot else "redness"
         evidence = (
             "локальный красный элемент, контрастный к окружающей коже"
             if ftype == "inflammation"
@@ -684,61 +695,207 @@ def _detect_diffuse_redness(grid, bbox, regions, base):
 
 
 def _detect_nasolabial(grid, bbox, regions, base):
-    """Носогубные складки: выраженные линии-перепады в носогубных зонах."""
+    """
+    Носогубные складки: маркер на диагонали крыло носа → уголок рта.
+    Показываем только при заметном гребне; вторая сторона — парно.
+    """
     findings = []
-    for rid in ("left_nasolabial", "right_nasolabial"):
-        pts = regions.get(rid) or []
-        if len(pts) < 25:
+    x0, y0, x1, y1 = bbox
+    fw, fh = max(1, x1 - x0), max(1, y1 - y0)
+
+    nose_pts = regions.get("nose") or []
+    if nose_pts:
+        nose_xs = [p[0] for p in nose_pts]
+        nose_ys = [p[1] for p in nose_pts]
+        nose_left = min(nose_xs)
+        nose_right = max(nose_xs)
+        mid_y = sum(nose_ys) / len(nose_ys)
+        low = [p for p in nose_pts if p[1] >= mid_y]
+        wing_y = sum(p[1] for p in low) / len(low) if low else (y0 + 0.62 * fh)
+    else:
+        nose_left = x0 + int(0.41 * fw)
+        nose_right = x0 + int(0.59 * fw)
+        wing_y = y0 + 0.62 * fh
+
+    mouth_y = y0 + 0.80 * fh
+    mouth_left = x0 + 0.30 * fw
+    mouth_right = x0 + 0.70 * fw
+
+    sides = (
+        ("left_nasolabial", nose_left, mouth_left),
+        ("right_nasolabial", nose_right, mouth_right),
+    )
+
+    scored_sides = []
+    for rid, wing_x, mouth_x in sides:
+        best = None  # (score, x, y, t)
+        for ti in range(14, 28):  # t = 0.35 … 0.675 — середина и низ складки
+            t = ti / 40.0
+            px = wing_x + (mouth_x - wing_x) * t
+            py = wing_y + (mouth_y - wing_y) * t
+            x = int(round(px))
+            y = int(round(py))
+            if x <= 1 or y <= 1 or x >= grid.w - 2 or y >= grid.h - 2:
+                continue
+            local_best = None
+            for ox in (-0.015, -0.008, 0.0, 0.008, 0.015):
+                xx = int(round(x + ox * fw))
+                if xx <= 1 or xx >= grid.w - 2:
+                    continue
+                gx, gy = grid.grad(xx, y)
+                across = abs(gx) * 1.45 + abs(gy) * 0.3
+                lap = grid.lap(xx, y)
+                mid_pref = 1.0 - abs(t - 0.50) * 1.6
+                score = (across + lap * 0.3) * max(0.4, mid_pref)
+                if local_best is None or score > local_best[0]:
+                    local_best = (score, xx, y, t)
+            if local_best and (best is None or local_best[0] > best[0]):
+                best = local_best
+        if best is None:
             continue
-        # зона с сильным красным избытком — след помады/улыбки, не складка
-        zone_rg = sum(grid.rg[y * grid.w + x] for x, y in pts) / len(pts)
-        if zone_rg - base["rg"] > 25:
+        scored_sides.append((best[0], rid, wing_x, mouth_x, best))
+
+    if not scored_sides:
+        return findings
+
+    # нужен хотя бы один заметный гребень складки
+    strong = any(s[0] >= 4.0 for s in scored_sides)
+    peak_floor = 3.2 if strong else 4.5
+    kept = [s for s in scored_sides if s[0] >= peak_floor]
+    if not kept and strong:
+        kept = [max(scored_sides, key=lambda s: s[0])]
+    if not kept:
+        return findings
+
+    for peak, rid, wing_x, mouth_x, best in kept:
+        t_anchor = 0.50
+        ax = wing_x + (mouth_x - wing_x) * t_anchor
+        ay = wing_y + (mouth_y - wing_y) * t_anchor
+        cx = 0.25 * best[1] + 0.75 * ax
+        cy = 0.25 * best[2] + 0.75 * ay
+        strength = min(1.0, max(0.0, (peak - 3.5) / 7.0))
+        conf = min(0.92, 0.48 + (peak - 3.5) / 14.0)
+        if conf < CONF_FLOOR or strength < 0.28:
             continue
-        laps = [(grid.lap(x, y), x, y) for x, y in pts]
-        tex = sum(l[0] for l in laps) / len(laps)
-        ratio = tex / max(0.5, base["tex"])
-        if tex < 5.5 or ratio < 1.25:
-            continue
-        top = sorted(laps, reverse=True)[: max(5, len(laps) // 5)]
-        cx = sum(t[1] for t in top) / len(top)
-        cy = sum(t[2] for t in top) / len(top)
-        bx0, by0 = min(t[1] for t in top), min(t[2] for t in top)
-        bx1, by1 = max(t[1] for t in top), max(t[2] for t in top)
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
-        strength = min(1.0, (ratio - 1.25) / 1.0 + (tex - 5.5) / 20.0)
-        conf = min(0.9, 0.5 + (ratio - 1.25) * 0.35 + tex / 70.0)
+        ix, iy = int(cx), int(cy)
         findings.append({
             "type": "nasolabial", "region": rid, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
-            "evidence": "выраженная линия-перепад в носогубной зоне",
-            "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+            "evidence": "линия-складка от крыла носа к уголку рта",
+            "geom": _to_pct(grid, cx, cy, ix, iy, ix, iy),
+        })
+    # парность: одна уверенная сторона → зеркало (с conf чуть выше порога)
+    if len(findings) == 1:
+        found = findings[0]
+        other = (
+            "left_nasolabial" if found["region"] == "right_nasolabial" else "right_nasolabial"
+        )
+        wing_x, mouth_x = (
+            (nose_left, mouth_left) if other == "left_nasolabial" else (nose_right, mouth_right)
+        )
+        t = 0.50
+        cx = wing_x + (mouth_x - wing_x) * t
+        cy = wing_y + (mouth_y - wing_y) * t
+        rlabel = dict((r[0], r[1]) for r in _REGIONS)[other]
+        ix, iy = int(cx), int(cy)
+        findings.append({
+            "type": "nasolabial", "region": other, "region_label": rlabel,
+            "strength": max(0.32, found["strength"] * 0.75),
+            "confidence": round(max(CONF_FLOOR + 0.02, found["confidence"] * 0.9), 2),
+            "evidence": "линия-складка от крыла носа к уголку рта",
+            "geom": _to_pct(grid, cx, cy, ix, iy, ix, iy),
         })
     return findings
 
 
 def _detect_dark_circles(grid, bbox, regions, base):
     findings = []
+    raw_sides = {}
+    x0, y0, x1, y1 = bbox
+    fh = max(1, y1 - y0)
     for rid in ("left_under_eye", "right_under_eye"):
         pts = regions.get(rid) or []
-        if len(pts) < 25:
+        if len(pts) < 18:
             continue
-        dark = [(x, y) for x, y in pts if base["luma"] - grid.luma[y * grid.w + x] > 22]
-        frac = len(dark) / len(pts)
-        if frac < 0.45:
+        # только непосредственно под глазом (верх зоны)
+        filtered = []
+        for x, y in pts:
+            fx, fy = _face_frac(x, y, bbox)
+            if fy > 0.57:
+                continue
+            filtered.append((x, y))
+        if len(filtered) < 12:
+            filtered = pts
+        dark = [(x, y) for x, y in filtered if base["luma"] - grid.luma[y * grid.w + x] > 16]
+        frac = len(dark) / max(1, len(filtered))
+        raw_sides[rid] = (frac, dark, filtered)
+
+    strong = any(v[0] >= 0.30 for v in raw_sides.values())
+    frac_floor = 0.22 if strong else 0.34
+
+    for rid, (frac, dark, filtered) in raw_sides.items():
+        if frac < frac_floor or len(dark) < 6:
             continue
         deficit = sum(base["luma"] - grid.luma[y * grid.w + x] for x, y in dark) / len(dark)
-        if deficit > 70:  # настолько тёмное — скорее волосы/оправа, не кожа
+        if deficit > 70:
             continue
-        cx = sum(p[0] for p in dark) / len(dark)
-        cy = sum(p[1] for p in dark) / len(dark)
-        bx0, by0, bx1, by1 = min(p[0] for p in dark), min(p[1] for p in dark), \
-            max(p[0] for p in dark), max(p[1] for p in dark)
-        strength = min(1.0, (deficit - 22) / 32.0 + (frac - 0.45) * 0.9)
-        conf = min(0.92, 0.5 + frac * 0.3 + deficit / 150.0)
+        dark_sorted = sorted(
+            dark, key=lambda p: base["luma"] - grid.luma[p[1] * grid.w + p[0]], reverse=True
+        )
+        core = dark_sorted[: max(6, len(dark_sorted) // 3)]
+        cx = sum(p[0] for p in core) / len(core)
+        cy = sum(p[1] for p in core) / len(core)
+        # якорь: центр маркера в слёзной борозде, не на щеке
+        cy = min(cy, y0 + 0.545 * fh)
+        fx, fy = _face_frac(cx, cy, bbox)
+        if fy > 0.56:
+            cy = y0 + 0.53 * fh
+        bx0, by0 = min(p[0] for p in core), min(p[1] for p in core)
+        bx1, by1 = max(p[0] for p in core), max(p[1] for p in core)
+        strength = min(1.0, (deficit - 16) / 32.0 + (frac - frac_floor) * 0.9)
+        conf = min(0.92, 0.50 + frac * 0.35 + deficit / 150.0)
+        if strong and frac < 0.38:
+            conf = min(conf, 0.80)
         label = dict((r[0], r[1]) for r in _REGIONS)[rid]
         findings.append({
             "type": "dark_circles", "region": rid, "region_label": label,
             "strength": strength, "confidence": round(conf, 2),
+            "evidence": "область под глазом заметно темнее среднего тона кожи",
+            "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+        })
+
+    # Всегда пара: если одна сторона есть — зеркалим вторую
+    if len(findings) == 1:
+        found = findings[0]
+        other = "left_under_eye" if found["region"] == "right_under_eye" else "right_under_eye"
+        pts = regions.get(other) or []
+        pts = [p for p in pts if _face_frac(p[0], p[1], bbox)[1] <= 0.57] or list(pts)
+        if len(pts) >= 8:
+            ranked = sorted(
+                pts, key=lambda p: base["luma"] - grid.luma[p[1] * grid.w + p[0]], reverse=True
+            )
+            core = ranked[: max(5, len(ranked) // 4)]
+            cx = sum(p[0] for p in core) / len(core)
+            cy = sum(p[1] for p in core) / len(core)
+            bx0, by0 = min(p[0] for p in core), min(p[1] for p in core)
+            bx1, by1 = max(p[0] for p in core), max(p[1] for p in core)
+        else:
+            g = found["geom"]
+            fw = max(1, x1 - x0)
+            cx0 = g["x"] / 100.0 * grid.w
+            cy0 = g["y"] / 100.0 * grid.h
+            fx, fy = _face_frac(cx0, cy0, bbox)
+            cx = x0 + (1.0 - fx) * fw
+            cy = y0 + fy * fh
+            bx0 = by0 = int(cx)
+            bx1 = by1 = int(cy)
+        cy = min(cy, y0 + 0.545 * fh)
+        label = dict((r[0], r[1]) for r in _REGIONS)[other]
+        findings.append({
+            "type": "dark_circles", "region": other, "region_label": label,
+            "strength": max(0.35, found["strength"] * 0.7),
+            "confidence": round(min(0.82, found["confidence"] * 0.88), 2),
             "evidence": "область под глазом заметно темнее среднего тона кожи",
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
@@ -747,8 +904,8 @@ def _detect_dark_circles(grid, bbox, regions, base):
 
 def _detect_pigmentation(grid, bbox, regions, base):
     findings = []
-    # без upper_lip (тени ноздрей) — пигментацию ищем на щеках, лбу и подбородке
-    zone_ids = ("left_cheek", "right_cheek", "forehead", "chin")
+    # только щёки и центральный лоб — подбородок и край лба дают ложные пятна
+    zone_ids = ("left_cheek", "right_cheek", "forehead")
     allowed = set()
     for rid in zone_ids:
         allowed.update(regions.get(rid) or [])
@@ -757,27 +914,29 @@ def _detect_pigmentation(grid, bbox, regions, base):
     for x, y in allowed:
         i = y * grid.w + x
         p = grid.px[i]
-        brownish = p[0] > p[1] >= p[2] - 6
+        brownish = p[0] > p[1] >= p[2] - 4 and (p[0] - p[2]) > 18
         deficit_px = base["luma"] - grid.luma[i]
-        # 20..58: темнее кожи, но не настолько, чтобы быть волосами/тенью от них
-        if 20 < deficit_px < 58 and brownish and grid.rg[i] - base["rg"] < 12:
+        # заметнее порог: слабые тени не считаем пигментом
+        if 28 < deficit_px < 52 and brownish and grid.rg[i] - base["rg"] < 10:
             anomaly.add((x, y))
     face_area = max(1, len(skin_all))
-    for pts in _components(anomaly, grid, min_area=5):
+    for pts in _components(anomaly, grid, min_area=6):
         area_frac = len(pts) / face_area
-        if area_frac > 0.02:  # большое тёмное поле — тень или волосы
+        if area_frac > 0.012 or area_frac < 0.0004:
             continue
-        # пятно должно быть компактным, а не полосой вдоль края лица
         _, _, bx0, by0, bx1, by1 = _comp_geometry(pts)
-        if (bx1 - bx0 + 1) * (by1 - by0 + 1) > len(pts) * 3.0:
+        bw, bh = bx1 - bx0 + 1, by1 - by0 + 1
+        if bw * bh > len(pts) * 2.6:
             continue
-        # окружение пятна должно быть кожей: пигментация лежит внутри кожи,
-        # тени от волос примыкают к границе лица
-        if _skin_ring_fraction(pts, skin_all) < 0.85:
+        # почти круглое компактное пятно, не полоса
+        if max(bw, bh) > min(bw, bh) * 2.4:
+            continue
+        if _skin_ring_fraction(pts, skin_all) < 0.88:
             continue
         geom = _pick_interior_centroid(
             pts, bbox, skin_all,
             score_fn=lambda p: base["luma"] - grid.luma[p[1] * grid.w + p[0]],
+            min_local=0.85,
         )
         if not geom:
             continue
@@ -786,16 +945,22 @@ def _detect_pigmentation(grid, bbox, regions, base):
         rid, rlabel = _region_of(fx, fy)
         if rid not in zone_ids:
             continue
-        # края лица и верх лба — зоны прядей волос и теней, пропускаем
-        if rid == "forehead" and fy < 0.20:
+        # лоб: только середина, ниже линии роста волос
+        if rid == "forehead" and (fy < 0.18 or fy > 0.30 or fx < 0.32 or fx > 0.68):
             continue
-        if fx < 0.20 or fx > 0.80:
+        # щеки: только середина «яблока», не низ и не край
+        if "cheek" in rid and (fx < 0.28 or fx > 0.72 or fy < 0.52 or fy > 0.66):
             continue
-        if "cheek" in rid and (fx < 0.22 or fx > 0.78):
+        # не путать тень носогубной складки с пигментом
+        if 0.58 <= fy <= 0.74 and abs(fx - 0.5) < 0.18:
             continue
         deficit = sum(base["luma"] - grid.luma[y * grid.w + x] for x, y in pts) / len(pts)
-        strength = min(1.0, (deficit - 20) / 30.0)
-        conf = min(0.9, 0.48 + (deficit - 20) / 70.0 + min(0.1, area_frac * 15))
+        if deficit < 34:
+            continue
+        strength = min(1.0, (deficit - 28) / 28.0)
+        conf = min(0.88, 0.58 + (deficit - 28) / 55.0 + min(0.08, area_frac * 20))
+        if conf < 0.78:
+            continue
         findings.append({
             "type": "pigmentation", "region": rid, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
@@ -803,7 +968,8 @@ def _detect_pigmentation(grid, bbox, regions, base):
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
     findings.sort(key=lambda f: f["confidence"], reverse=True)
-    return findings[:3]
+    # только уверенные пятна — иначе маркер ставится «в никуда»
+    return [f for f in findings if f["confidence"] >= 0.78][:2]
 
 
 def _detect_texture(grid, bbox, regions, base):
@@ -886,22 +1052,25 @@ def _detect_shine(grid, bbox, regions, base):
 def _detect_wrinkles(grid, bbox, regions, base):
     """Линии лба, межбровья и под глазами по направленным градиентам."""
     findings = []
-    # Опорный уровень «гладкой кожи» — горизонтальные градиенты лба:
-    # мелкие линии под глазами видны как превышение над ним.
     fh_pts = regions.get("forehead") or []
     fh_gy = (
         sum(grid.grad(x, y)[1] for x, y in fh_pts) / len(fh_pts) if len(fh_pts) > 30 else 2.0
     )
+    under_floor = max(2.2, fh_gy * 1.55)
     checks = [
         ("forehead", "horizontal", 4.2),
         ("glabella", "vertical", 4.2),
-        ("left_under_eye", "horizontal", max(2.3, fh_gy * 1.7)),
-        ("right_under_eye", "horizontal", max(2.3, fh_gy * 1.7)),
+        ("left_under_eye", "horizontal", under_floor),
+        ("right_under_eye", "horizontal", under_floor),
     ]
+    under_raw = {}
     for rid, direction, floor in checks:
         pts = regions.get(rid) or []
-        if len(pts) < 30:
+        if len(pts) < 28:
             continue
+        # под глазом — только верх зоны
+        if "under_eye" in rid:
+            pts = [p for p in pts if _face_frac(p[0], p[1], bbox)[1] <= 0.57] or pts
         gx_sum = gy_sum = 0.0
         for x, y in pts:
             gx, gy = grid.grad(x, y)
@@ -920,6 +1089,9 @@ def _detect_wrinkles(grid, bbox, regions, base):
             main, cross = gx_m, gy_m
             evidence = "вертикальные линии в межбровной зоне"
         ratio_floor = 1.05 if "under_eye" in rid else 1.6
+        if "under_eye" in rid:
+            under_raw[rid] = (main, cross, pts, floor, ratio_floor, evidence)
+            continue
         if main < floor or main < cross * ratio_floor:
             continue
         strong = sorted(
@@ -931,15 +1103,101 @@ def _detect_wrinkles(grid, bbox, regions, base):
         bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
         bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
-        conf_base = 0.54 if "under_eye" in rid else 0.5
         strength = min(1.0, (main - floor) / 6.0 + max(0.0, main / max(0.5, cross) - ratio_floor) * 0.5)
-        conf = min(0.9, conf_base + (main - floor) / 12.0 + (main / max(0.5, cross) - ratio_floor) * 0.3)
+        conf = min(0.9, 0.5 + (main - floor) / 12.0 + (main / max(0.5, cross) - ratio_floor) * 0.3)
         findings.append({
             "type": "wrinkles", "region": rid, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
             "evidence": evidence,
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
+
+    # парные морщинки под глазами: одна сильная сторона «открывает» вторую
+    x0, y0, x1, y1 = bbox
+    fh = max(1, y1 - y0)
+    strong_under = any(
+        main >= floor and main >= cross * ratio_floor
+        for main, cross, _, floor, ratio_floor, _ in under_raw.values()
+    )
+    for rid, (main, cross, pts, floor, ratio_floor, evidence) in under_raw.items():
+        soft_floor = floor * (0.78 if strong_under else 1.0)
+        soft_ratio = ratio_floor * (0.90 if strong_under else 1.0)
+        if main < soft_floor or main < cross * soft_ratio:
+            continue
+        # предпочитаем центральную/медиальную треть под глазом, не внешний угол
+        if "left" in rid:
+            pts_pref = [
+                p for p in pts
+                if 0.24 <= _face_frac(p[0], p[1], bbox)[0] <= 0.36
+            ] or pts
+        else:
+            pts_pref = [
+                p for p in pts
+                if 0.64 <= _face_frac(p[0], p[1], bbox)[0] <= 0.76
+            ] or pts
+        strong = sorted(
+            ((grid.grad(x, y)[1], x, y) for x, y in pts_pref),
+            reverse=True,
+        )[: max(6, len(pts_pref) // 8)]
+        cx = sum(s[1] for s in strong) / len(strong)
+        cy = sum(s[2] for s in strong) / len(strong)
+        cy = min(cy, y0 + 0.545 * fh)
+        # якорь к середине подглазья
+        fw = max(1, x1 - x0)
+        if "left" in rid:
+            cx = 0.45 * cx + 0.55 * (x0 + 0.31 * fw)
+        else:
+            cx = 0.45 * cx + 0.55 * (x0 + 0.69 * fw)
+        bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
+        bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
+        rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
+        strength = min(1.0, (main - soft_floor) / 6.0 + max(0.0, main / max(0.5, cross) - soft_ratio) * 0.5)
+        conf = min(0.9, 0.54 + (main - soft_floor) / 12.0 + (main / max(0.5, cross) - soft_ratio) * 0.3)
+        findings.append({
+            "type": "wrinkles", "region": rid, "region_label": rlabel,
+            "strength": strength, "confidence": round(conf, 2),
+            "evidence": evidence,
+            "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+        })
+    under_findings = [f for f in findings if "under_eye" in f["region"]]
+    if len(under_findings) == 1:
+        found = under_findings[0]
+        other = "left_under_eye" if found["region"] == "right_under_eye" else "right_under_eye"
+        if other in under_raw:
+            main, cross, pts, floor, ratio_floor, evidence = under_raw[other]
+            if len(pts) >= 16:
+                strong = sorted(
+                    ((grid.grad(x, y)[1], x, y) for x, y in pts), reverse=True
+                )[: max(6, len(pts) // 8)]
+                cx = sum(s[1] for s in strong) / len(strong)
+                cy = min(sum(s[2] for s in strong) / len(strong), y0 + 0.545 * fh)
+                bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
+                bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
+                rlabel = dict((r[0], r[1]) for r in _REGIONS)[other]
+                findings.append({
+                    "type": "wrinkles", "region": other, "region_label": rlabel,
+                    "strength": max(0.3, found["strength"] * 0.7),
+                    "confidence": round(min(0.80, found["confidence"] * 0.88), 2),
+                    "evidence": evidence,
+                    "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+                })
+        else:
+            # геометрическое зеркало, если зона пуста
+            g = found["geom"]
+            fw = max(1, x1 - x0)
+            cx0 = g["x"] / 100.0 * grid.w
+            cy0 = g["y"] / 100.0 * grid.h
+            fx, fy = _face_frac(cx0, cy0, bbox)
+            cx = x0 + (1.0 - fx) * fw
+            cy = min(y0 + fy * fh, y0 + 0.545 * fh)
+            rlabel = dict((r[0], r[1]) for r in _REGIONS)[other]
+            findings.append({
+                "type": "wrinkles", "region": other, "region_label": rlabel,
+                "strength": max(0.3, found["strength"] * 0.7),
+                "confidence": round(min(0.78, found["confidence"] * 0.85), 2),
+                "evidence": "мелкие горизонтальные линии под глазом",
+                "geom": _to_pct(grid, cx, cy, int(cx), int(cy), int(cx), int(cy)),
+            })
     return findings
 
 

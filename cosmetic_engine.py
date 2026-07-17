@@ -531,19 +531,44 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
     features = []
     zones = []
     for ftype, items in per_type.items():
-        items = items[:2]
-        top = items[0]
+        # до 2 маркеров одного типа — обычно левая и правая сторона
+        items = sorted(
+            items,
+            key=lambda f: (f["confidence"] + f.get("strength", 0), f["confidence"]),
+            reverse=True,
+        )
+        picked = []
+        seen_side = set()
+        for f in items:
+            rid = f.get("region") or ""
+            side = (
+                "L" if "left" in rid else
+                "R" if "right" in rid else
+                rid
+            )
+            if side in seen_side:
+                continue
+            picked.append(f)
+            seen_side.add(side)
+            if len(picked) >= 2:
+                break
+        if not picked:
+            continue
+        top = picked[0]
+        area_label = top["region_label"]
+        if len(picked) == 2:
+            area_label = f"{picked[0]['region_label']} и {picked[1]['region_label']}"
         features.append({
             "id": ftype,
             "label": top["label"],
-            "area": top["region_label"],
+            "area": area_label,
             "score": top["score"],
             "severity": top["severity"],
             "severity_label": top["severity_label"],
             "confidence": top["confidence"],
             "evidence": top["evidence"],
         })
-        for i, f in enumerate(items):
+        for i, f in enumerate(picked):
             zones.append(_zone_dict(f, i))
 
     # До 6 типов признаков — самые уверенные и выраженные первыми.

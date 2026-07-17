@@ -64,7 +64,10 @@ def t_clean():
     scan = cosmetic_engine.analyze_skin_photo(to_bytes(base_face()))
     n = len(scan["features"])
     assert n <= 2, f"на чистой коже найдено {n} признаков: {[f['id'] for f in scan['features']]}"
-    assert len(scan["zones"]) == n, "zones и features разошлись"
+    zone_types = {z["metric_id"] for z in scan["zones"]}
+    feat_types = {f["id"] for f in scan["features"]}
+    assert zone_types == feat_types, "zones и features разошлись"
+    assert len(scan["zones"]) <= max(1, 2 * n), "слишком много маркеров на тип"
 results.append(run("чистая кожа — без выдуманных проблем", t_clean))
 
 # 2. Красное воспаление на щеке — маркер точно на нём
