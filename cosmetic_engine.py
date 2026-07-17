@@ -532,6 +532,105 @@ def _image_samples(image_bytes):
         return _jpeg_approx_samples(image_bytes), "hash"
 
 
+# Face-template zones (% of image, center + size). Demo landmarks — not medical CV.
+_ZONE_TEMPLATES = {
+    "pores": [
+        {"x": 50, "y": 42, "w": 12, "h": 10, "label": "Т-зона"},
+        {"x": 34, "y": 54, "w": 14, "h": 11, "label": "Щека слева"},
+        {"x": 66, "y": 54, "w": 14, "h": 11, "label": "Щека справа"},
+    ],
+    "redness": [
+        {"x": 34, "y": 55, "w": 15, "h": 12, "label": "Щека слева"},
+        {"x": 66, "y": 55, "w": 15, "h": 12, "label": "Щека справа"},
+        {"x": 50, "y": 48, "w": 10, "h": 9, "label": "Нос"},
+    ],
+    "fine_lines": [
+        {"x": 36, "y": 42, "w": 14, "h": 8, "label": "Под глазом"},
+        {"x": 64, "y": 42, "w": 14, "h": 8, "label": "Под глазом"},
+        {"x": 50, "y": 28, "w": 22, "h": 8, "label": "Лоб"},
+    ],
+    "hydration": [
+        {"x": 34, "y": 58, "w": 14, "h": 11, "label": "Щека"},
+        {"x": 66, "y": 58, "w": 14, "h": 11, "label": "Щека"},
+        {"x": 50, "y": 72, "w": 16, "h": 9, "label": "Подбородок"},
+    ],
+    "radiance": [
+        {"x": 50, "y": 30, "w": 20, "h": 8, "label": "Лоб"},
+        {"x": 50, "y": 52, "w": 28, "h": 16, "label": "Центр лица"},
+    ],
+    "barrier": [
+        {"x": 34, "y": 56, "w": 15, "h": 12, "label": "Щека"},
+        {"x": 66, "y": 56, "w": 15, "h": 12, "label": "Щека"},
+    ],
+}
+
+# Higher = more “attention” for problem-style metrics; lower = attention for health-style.
+_ZONE_ATTENTION = {
+    "pores": "high",
+    "redness": "high",
+    "fine_lines": "high",
+    "hydration": "low",
+    "radiance": "low",
+    "barrier": "low",
+}
+
+
+def _build_zones(metrics, priority_concern):
+    """Map metrics onto face templates for Geltek-like zone markers."""
+    by_id = {m["id"]: m for m in metrics}
+    zones = []
+    order = []
+    priority_metric = {
+        "pores": "pores",
+        "sensitivity": "redness",
+        "dryness": "hydration",
+        "dullness": "radiance",
+        "aging": "fine_lines",
+    }.get(priority_concern)
+    if priority_metric:
+        order.append(priority_metric)
+    for mid in ("redness", "pores", "fine_lines", "hydration", "radiance", "barrier"):
+        if mid not in order:
+            order.append(mid)
+
+    # Always show up to 4 concern tags for wow UX (priority first).
+    picked = order[:4]
+    for mid in picked:
+        m = by_id.get(mid)
+        if not m:
+            continue
+        score = int(m["score"])
+        attention = _ZONE_ATTENTION.get(mid, "high")
+        templates = _ZONE_TEMPLATES.get(mid, [])
+        if attention == "high":
+            count = 1 + (1 if score >= 35 else 0) + (1 if score >= 55 else 0)
+        else:
+            count = 1 + (1 if score <= 60 else 0) + (1 if score <= 40 else 0)
+        count = max(1, min(count, len(templates) or 1))
+        if not templates:
+            templates = [{"x": 50, "y": 48, "w": 14, "h": 10, "label": "Лицо"}]
+        status = "Обнаружено" if (attention == "high" and score >= 30) or (
+            attention == "low" and score <= 60
+        ) else "В норме"
+        for i, t in enumerate(templates[:count]):
+            zones.append(
+                {
+                    "id": f"{mid}_{i}",
+                    "metric_id": mid,
+                    "label": m["label"],
+                    "area": t["label"],
+                    "x": t["x"],
+                    "y": t["y"],
+                    "w": t["w"],
+                    "h": t["h"],
+                    "score": score,
+                    "status": status,
+                    "attention": attention,
+                }
+            )
+    return zones
+
+
 def analyze_skin_photo(image_bytes, filename="photo.jpg"):
     """
     Demo-grade skin analysis for wow UX.
@@ -588,6 +687,8 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         {"id": "barrier", "label": "Барьер кожи", "score": round(barrier), "hint": "защита"},
     ]
 
+    zones = _build_zones(metrics, priority)
+
     tip = {
         "pores": "Сфокусируемся на мягком очищении и ниацинамиде без пересушивания.",
         "sensitivity": "Начнём с восстановления барьера — активные кислоты позже.",
@@ -605,6 +706,7 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         "suggested_skin_type": skin_guess,
         "suggested_concern": priority,
         "metrics": metrics,
+        "zones": zones,
         "tip": tip,
         "narrative": [
             "Проверяю свет и зону лица…",
