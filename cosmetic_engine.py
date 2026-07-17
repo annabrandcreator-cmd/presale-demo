@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 """Движок персонального подбора ухода + демо-анализ фото кожи."""
-import hashlib
-import io
 import json
 import os
-import struct
 import uuid
-import zlib
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CATALOG_PATH = os.path.join(APP_DIR, "cosmetic_catalog.json")
@@ -457,255 +453,136 @@ def session_summary(answers, routine, catalog):
 # ── Photo / skin scan (demo Vision) ─────────────────────────────────────────
 
 
-def _png_rgba_samples(data, max_samples=1200):
-    """Minimal PNG reader for RGBA/RGB samples (no Pillow dependency)."""
-    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n":
-        return None
-    pos = 8
-    width = height = None
-    bit_depth = color_type = None
-    idat = b""
-    while pos + 8 <= len(data):
-        length = struct.unpack(">I", data[pos:pos + 4])[0]
-        ctype = data[pos + 4:pos + 8]
-        chunk = data[pos + 8:pos + 8 + length]
-        pos += 12 + length
-        if ctype == b"IHDR":
-            width, height, bit_depth, color_type = struct.unpack(">IIBB", chunk[:10])
-        elif ctype == b"IDAT":
-            idat += chunk
-        elif ctype == b"IEND":
-            break
-    if not width or not idat or bit_depth != 8 or color_type not in (2, 6):
-        return None
-    try:
-        raw = zlib.decompress(idat)
-    except zlib.error:
-        return None
-    bpp = 3 if color_type == 2 else 4
-    stride = width * bpp + 1
-    samples = []
-    step = max(1, (width * height) // max_samples)
-    idx = 0
-    for y in range(height):
-        row_start = y * stride + 1
-        for x in range(width):
-            if idx % step == 0:
-                i = row_start + x * bpp
-                if i + 2 < len(raw):
-                    samples.append((raw[i], raw[i + 1], raw[i + 2]))
-            idx += 1
-    return samples or None
-
-
-def _jpeg_approx_samples(data):
-    """Fallback: derive pseudo-metrics from JPEG entropy (no decode)."""
-    digest = hashlib.sha256(data).digest()
-    # Stable but photo-dependent pseudo RGB averages
-    r = 90 + digest[0] % 100
-    g = 70 + digest[1] % 90
-    b = 65 + digest[2] % 85
-    samples = []
-    for i in range(200):
-        samples.append((
-            min(255, max(0, r + (digest[i % 32] % 40) - 20)),
-            min(255, max(0, g + (digest[(i + 3) % 32] % 40) - 20)),
-            min(255, max(0, b + (digest[(i + 7) % 32] % 40) - 20)),
-        ))
-    return samples
-
-
-def _image_samples(image_bytes):
-    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
-        samples = _png_rgba_samples(image_bytes)
-        if samples:
-            return samples, "png"
-    if image_bytes[:2] == b"\xff\xd8":
-        return _jpeg_approx_samples(image_bytes), "jpeg"
-    # try pillow if present
-    try:
-        from PIL import Image
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        img = img.resize((64, 64))
-        return list(img.getdata()), "pillow"
-    except Exception:
-        return _jpeg_approx_samples(image_bytes), "hash"
-
-
-# Face-template zones (% of image, center + size). Demo landmarks — not medical CV.
-_ZONE_TEMPLATES = {
-    "pores": [
-        {"x": 50, "y": 42, "w": 12, "h": 10, "label": "Т-зона"},
-        {"x": 34, "y": 54, "w": 14, "h": 11, "label": "Щека слева"},
-        {"x": 66, "y": 54, "w": 14, "h": 11, "label": "Щека справа"},
-    ],
-    "redness": [
-        {"x": 34, "y": 55, "w": 15, "h": 12, "label": "Щека слева"},
-        {"x": 66, "y": 55, "w": 15, "h": 12, "label": "Щека справа"},
-        {"x": 50, "y": 48, "w": 10, "h": 9, "label": "Нос"},
-    ],
-    "fine_lines": [
-        {"x": 36, "y": 42, "w": 14, "h": 8, "label": "Под глазом"},
-        {"x": 64, "y": 42, "w": 14, "h": 8, "label": "Под глазом"},
-        {"x": 50, "y": 28, "w": 22, "h": 8, "label": "Лоб"},
-    ],
-    "hydration": [
-        {"x": 34, "y": 58, "w": 14, "h": 11, "label": "Щека"},
-        {"x": 66, "y": 58, "w": 14, "h": 11, "label": "Щека"},
-        {"x": 50, "y": 72, "w": 16, "h": 9, "label": "Подбородок"},
-    ],
-    "radiance": [
-        {"x": 50, "y": 30, "w": 20, "h": 8, "label": "Лоб"},
-        {"x": 50, "y": 52, "w": 28, "h": 16, "label": "Центр лица"},
-    ],
-    "barrier": [
-        {"x": 34, "y": 56, "w": 15, "h": 12, "label": "Щека"},
-        {"x": 66, "y": 56, "w": 15, "h": 12, "label": "Щека"},
-    ],
+# Какой запрос ухода закрывает каждый видимый признак.
+_FEATURE_CONCERN = {
+    "inflammation": "acne",
+    "redness": "sensitivity",
+    "pigmentation": "dullness",
+    "dark_circles": "dullness",
+    "pores": "pores",
+    "shine": "pores",
+    "wrinkles": "aging",
+    "dryness": "dryness",
 }
 
-# Higher = more “attention” for problem-style metrics; lower = attention for health-style.
-_ZONE_ATTENTION = {
-    "pores": "high",
-    "redness": "high",
-    "fine_lines": "high",
-    "hydration": "low",
-    "radiance": "low",
-    "barrier": "low",
+_CONCERN_TIPS = {
+    "pores": "Сфокусируемся на мягком очищении и ниацинамиде без пересушивания.",
+    "sensitivity": "Начнём с восстановления барьера — активные кислоты позже.",
+    "dryness": "Сначала церамиды и увлажнение, затем точечные активы.",
+    "dullness": "Добавим мягкое обновление и антиоксиданты для тона.",
+    "aging": "Плотность + SPF — база; ретинол только если кожа готова.",
+    "acne": "Мягкое очищение и точечный уход без пересушивания кожи.",
 }
 
 
-def _build_zones(metrics, priority_concern):
-    """Map metrics onto face templates for Geltek-like zone markers."""
-    by_id = {m["id"]: m for m in metrics}
-    zones = []
-    order = []
-    priority_metric = {
-        "pores": "pores",
-        "sensitivity": "redness",
-        "dryness": "hydration",
-        "dullness": "radiance",
-        "aging": "fine_lines",
-    }.get(priority_concern)
-    if priority_metric:
-        order.append(priority_metric)
-    for mid in ("redness", "pores", "fine_lines", "hydration", "radiance", "barrier"):
-        if mid not in order:
-            order.append(mid)
-
-    # Always show up to 4 concern tags for wow UX (priority first).
-    picked = order[:4]
-    for mid in picked:
-        m = by_id.get(mid)
-        if not m:
-            continue
-        score = int(m["score"])
-        attention = _ZONE_ATTENTION.get(mid, "high")
-        templates = _ZONE_TEMPLATES.get(mid, [])
-        if attention == "high":
-            count = 1 + (1 if score >= 35 else 0) + (1 if score >= 55 else 0)
-        else:
-            count = 1 + (1 if score <= 60 else 0) + (1 if score <= 40 else 0)
-        count = max(1, min(count, len(templates) or 1))
-        if not templates:
-            templates = [{"x": 50, "y": 48, "w": 14, "h": 10, "label": "Лицо"}]
-        status = "Обнаружено" if (attention == "high" and score >= 30) or (
-            attention == "low" and score <= 60
-        ) else "В норме"
-        for i, t in enumerate(templates[:count]):
-            zones.append(
-                {
-                    "id": f"{mid}_{i}",
-                    "metric_id": mid,
-                    "label": m["label"],
-                    "area": t["label"],
-                    "x": t["x"],
-                    "y": t["y"],
-                    "w": t["w"],
-                    "h": t["h"],
-                    "score": score,
-                    "status": status,
-                    "attention": attention,
-                }
-            )
-    return zones
+def _zone_dict(f, i):
+    return {
+        "id": f"{f['type']}_{i}",
+        "metric_id": f["type"],
+        "label": f["label"],
+        "area": f["region_label"],
+        "region": f["region"],
+        "x": f["geom"]["x"],
+        "y": f["geom"]["y"],
+        "w": f["geom"]["w"],
+        "h": f["geom"]["h"],
+        "score": f["score"],
+        "status": "Обнаружено",
+        "attention": "high",
+        "severity": f["severity"],
+        "severity_label": f["severity_label"],
+        "confidence": f["confidence"],
+        "evidence": f["evidence"],
+    }
 
 
 def analyze_skin_photo(image_bytes, filename="photo.jpg"):
     """
-    Demo-grade skin analysis for wow UX.
-    Not a medical device — returns structured metrics for product matching.
+    Анализ фото: качество → сегментация лица → поиск видимых признаков →
+    уверенность и выраженность → маркер в центре найденной области.
+    Не медицинская диагностика; фото не сохраняется.
     """
+    from cosmetic_vision import analyze as vision_analyze, PhotoQualityError
+
     if not image_bytes or len(image_bytes) < 100:
         raise ValueError("Пустое изображение")
     if len(image_bytes) > 8_000_000:
         raise ValueError("Файл слишком большой (макс. 8 МБ)")
 
-    samples, mode = _image_samples(image_bytes)
-    n = max(len(samples), 1)
-    avg_r = sum(s[0] for s in samples) / n
-    avg_g = sum(s[1] for s in samples) / n
-    avg_b = sum(s[2] for s in samples) / n
-    brightness = (avg_r + avg_g + avg_b) / 3
-    redness = max(0, min(100, ((avg_r - avg_g) * 1.8 + 20)))
-    variance = sum((s[0] - avg_r) ** 2 + (s[1] - avg_g) ** 2 for s in samples) / n
-    texture = max(0, min(100, variance / 18))
-    hydration = max(15, min(92, 100 - abs(brightness - 145) / 1.6 - texture * 0.15))
-    pores = max(18, min(88, texture * 0.85 + (30 if brightness > 160 else 18)))
-    radiance = max(20, min(90, brightness / 2.4 + (100 - redness) * 0.25))
-    fine_lines = max(12, min(80, (100 - hydration) * 0.35 + texture * 0.25))
-    barrier = max(20, min(90, hydration * 0.7 + (100 - redness) * 0.3))
+    try:
+        vision = vision_analyze(image_bytes)
+    except PhotoQualityError as e:
+        # Честный отказ вместо угадывания: фронт попросит другое фото.
+        raise ValueError(str(e))
 
-    # Priority concern from metrics
-    candidates = [
-        ("pores", pores, "сужение пор"),
-        ("sensitivity", redness, "чувствительность"),
-        ("dryness", 100 - hydration, "увлажнение"),
-        ("dullness", 100 - radiance, "сияние"),
-        ("aging", fine_lines, "возрастные изменения"),
-    ]
-    candidates.sort(key=lambda x: x[1], reverse=True)
-    priority = candidates[0][0]
+    findings = vision["findings"]
 
-    if redness >= 55 and hydration < 50:
-        skin_guess = "sensitive"
-    elif pores >= 58 and brightness > 150:
-        skin_guess = "oily"
-    elif hydration < 48:
-        skin_guess = "dry"
-    elif pores >= 50 and hydration >= 48:
-        skin_guess = "combination"
+    # Теги, маркеры и строки блока «Видимые особенности кожи» —
+    # строго из одного списка findings, чтобы они не расходились.
+    # Один тип признака = один тег и одна строка (по самому выраженному месту);
+    # маркеров на фото для типа может быть до двух (например, обе щеки).
+    per_type = {}
+    for f in findings:
+        per_type.setdefault(f["type"], []).append(f)
+
+    features = []
+    zones = []
+    for ftype, items in per_type.items():
+        items = items[:2]
+        top = items[0]
+        features.append({
+            "id": ftype,
+            "label": top["label"],
+            "area": top["region_label"],
+            "score": top["score"],
+            "severity": top["severity"],
+            "severity_label": top["severity_label"],
+            "confidence": top["confidence"],
+            "evidence": top["evidence"],
+        })
+        for i, f in enumerate(items):
+            zones.append(_zone_dict(f, i))
+
+    # Не перегружаем карточку: максимум 4 типа (самые уверенные и выраженные).
+    features.sort(key=lambda f: f["confidence"] + f["score"] / 100.0, reverse=True)
+    features = features[:4]
+    kept_types = {f["id"] for f in features}
+    zones = [z for z in zones if z["metric_id"] in kept_types]
+
+    # Приоритетный запрос — от самого выраженного подтверждённого признака.
+    if findings:
+        top = findings[0]
+        priority = _FEATURE_CONCERN.get(top["type"], "dryness")
+        headline = f"Вижу акцент на «{CONCERN_LABELS.get(priority, priority)}»"
     else:
-        skin_guess = "normal"
+        m = vision["metrics"]
+        priority = "dryness" if m["hydration"] < 55 else "dullness"
+        headline = "Выраженных проблемных зон не нашла — кожа выглядит ровной"
 
+    skin_guess = vision["skin_type"]
+    m = vision["metrics"]
     metrics = [
-        {"id": "hydration", "label": "Увлажнённость", "score": round(hydration), "hint": "комфорт"},
-        {"id": "pores", "label": "Поры", "score": round(pores), "hint": "видимость"},
-        {"id": "redness", "label": "Покраснения", "score": round(redness), "hint": "реактивность"},
-        {"id": "radiance", "label": "Сияние", "score": round(radiance), "hint": "ровность тона"},
-        {"id": "fine_lines", "label": "Морщинки", "score": round(fine_lines), "hint": "мелкие линии"},
-        {"id": "barrier", "label": "Барьер кожи", "score": round(barrier), "hint": "защита"},
+        {"id": "hydration", "label": "Увлажнённость", "score": m["hydration"], "hint": "комфорт"},
+        {"id": "pores", "label": "Поры", "score": m["pores"], "hint": "видимость"},
+        {"id": "redness", "label": "Покраснения", "score": m["redness"], "hint": "реактивность"},
+        {"id": "radiance", "label": "Сияние", "score": m["radiance"], "hint": "ровность тона"},
+        {"id": "fine_lines", "label": "Морщинки", "score": m["fine_lines"], "hint": "мелкие линии"},
+        {"id": "barrier", "label": "Барьер кожи", "score": m["barrier"], "hint": "защита"},
     ]
 
-    zones = _build_zones(metrics, priority)
-
-    tip = {
-        "pores": "Сфокусируемся на мягком очищении и ниацинамиде без пересушивания.",
-        "sensitivity": "Начнём с восстановления барьера — активные кислоты позже.",
-        "dryness": "Сначала церамиды и увлажнение, затем точечные активы.",
-        "dullness": "Добавим мягкое обновление и антиоксиданты для тона.",
-        "aging": "Плотность + SPF — база; ретинол только если кожа готова.",
-    }.get(priority, "Соберём уход вокруг вашей главной зоны внимания.")
+    tip = _CONCERN_TIPS.get(priority, "Соберём уход вокруг вашей главной зоны внимания.")
 
     return {
         "ok": True,
-        "mode": mode,
+        "mode": "vision",
         "disclaimer": "Демо-анализ по фото. Не заменяет консультацию косметолога или врача. Фото не сохраняется.",
-        "headline": f"Вижу акцент на «{CONCERN_LABELS.get(priority, priority)}»",
+        "headline": headline,
         "priority_concern": priority,
         "suggested_skin_type": skin_guess,
         "suggested_concern": priority,
+        "quality": vision["quality"],
         "metrics": metrics,
+        "features": features,
         "zones": zones,
         "tip": tip,
         "narrative": [
