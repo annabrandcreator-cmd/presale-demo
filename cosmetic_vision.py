@@ -13,7 +13,8 @@ from collections import deque
 
 GRID_W = 168          # ширина рабочей сетки анализа
 MIN_SOURCE_SIDE = 200  # минимальный размер исходного фото, px
-CONF_FLOOR = 0.70      # признаки с меньшей уверенностью не показываем
+CONF_FLOOR = 0.62      # признаки с меньшей уверенностью не показываем
+MAX_FINDINGS = 8       # максимум областей в сыром результате
 
 
 class PhotoQualityError(ValueError):
@@ -26,30 +27,35 @@ class PhotoQualityError(ValueError):
 _REGIONS = [
     ("forehead", "Лоб", 0.24, 0.13, 0.76, 0.32),
     ("glabella", "Межбровье", 0.41, 0.32, 0.59, 0.41),
-    ("left_under_eye", "Под глазом слева", 0.18, 0.54, 0.42, 0.63),
-    ("right_under_eye", "Под глазом справа", 0.58, 0.54, 0.82, 0.63),
+    ("left_under_eye", "Под глазом слева", 0.18, 0.54, 0.42, 0.66),
+    ("right_under_eye", "Под глазом справа", 0.58, 0.54, 0.82, 0.66),
     ("nose", "Нос", 0.41, 0.42, 0.59, 0.66),
+    ("left_nasolabial", "Носогубная зона слева", 0.26, 0.64, 0.38, 0.78),
+    ("right_nasolabial", "Носогубная зона справа", 0.62, 0.64, 0.74, 0.78),
     ("left_cheek", "Щека слева", 0.10, 0.58, 0.39, 0.82),
     ("right_cheek", "Щека справа", 0.61, 0.58, 0.90, 0.82),
     ("upper_lip", "Над верхней губой", 0.41, 0.66, 0.59, 0.71),
     ("chin", "Подбородок", 0.36, 0.90, 0.64, 1.0),
 ]
 
-# Глаза с бровями и рот исключаются из анализа кожи полностью.
+# Глаза с бровями и рот (с запасом на широкую улыбку) исключаются полностью.
 _EXCLUDE = [
     (0.10, 0.36, 0.45, 0.54),
     (0.55, 0.36, 0.90, 0.54),
-    (0.33, 0.72, 0.67, 0.90),
+    (0.28, 0.78, 0.72, 0.92),
+    (0.34, 0.72, 0.66, 0.78),
 ]
 
 FEATURE_LABELS = {
     "inflammation": "Воспаления",
     "redness": "Покраснения",
+    "rosacea_like": "Сосудистая краснота",
     "pigmentation": "Пигментация",
     "dark_circles": "Тёмные круги",
     "pores": "Расширенные поры",
     "shine": "Жирный блеск",
     "wrinkles": "Морщинки",
+    "nasolabial": "Носогубные складки",
     "dryness": "Сухость",
 }
 
@@ -324,7 +330,9 @@ def _collect_region_pixels(grid, bbox):
             for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
         )
     regions = {rid: [p for p in pts if interior(p)] for rid, pts in regions.items()}
-    face_pixels = [p for p in face_pixels if interior(p)]
+    # Базлайн «средней кожи» считаем только по пикселям анатомических зон:
+    # остальная часть рамки может содержать волосы, уши и край фона.
+    face_pixels = [p for pts in regions.values() for p in pts]
     if len(face_pixels) < 300:
         raise PhotoQualityError(
             "Кожа лица почти не видна на снимке — уберите волосы и предметы с лица "
@@ -397,6 +405,19 @@ def _detect_red(grid, bbox, regions, base):
     findings = []
     region_pts = {rid: set(pts) for rid, pts in regions.items()}
     allowed = set().union(*region_pts.values()) if region_pts else set()
+
+    # Типичный красный тон самих губ (центр рта): чтобы отличать помаду и
+    # уголки губ от настоящих воспалений рядом со ртом.
+    x0, y0, x1, y1 = bbox
+    fw, fh = max(1, x1 - x0), max(1, y1 - y0)
+    mx0, my0 = int(x0 + 0.38 * fw), int(y0 + 0.80 * fh)
+    mx1, my1 = int(x0 + 0.62 * fw), int(y0 + 0.90 * fh)
+    lip_rgs = sorted(
+        grid.rg[yy * grid.w + xx]
+        for yy in range(max(0, my0), min(grid.h, my1))
+        for xx in range(max(0, mx0), min(grid.w, mx1))
+    )
+    lip_rg = lip_rgs[len(lip_rgs) * 3 // 4] if lip_rgs else None
     anomaly = {
         (x, y) for (x, y) in allowed
         if grid.rg[y * grid.w + x] - base["rg"] > 21
@@ -417,8 +438,13 @@ def _detect_red(grid, bbox, regions, base):
         area_frac = len(pts) / face_area
         comp_w = bx1 - bx0 + 1
         comp_h = by1 - by0 + 1
-        # губы: очень красная широкая горизонтальная полоса у рта — не кожа
-        if fy > 0.60 and excess > 50 and comp_w >= comp_h * 2.0:
+        # губы/помада: очень красные участки в нижней трети лица — не кожа
+        if fy > 0.60 and (excess > 80 or (excess > 50 and comp_w >= comp_h * 2.0)):
+            continue
+        # уголки губ/края помады: красный элемент около рта с тоном как у губ
+        comp_rg = sum(grid.rg[y * grid.w + x] for x, y in pts) / len(pts)
+        near_mouth = 0.24 < fx < 0.76 and 0.66 < fy < 0.98
+        if near_mouth and lip_rg is not None and abs(comp_rg - lip_rg) < 28:
             continue
         compact = comp_w * comp_h <= len(pts) * 3.2
         strength = min(1.0, (excess - 21) / 34.0 + area_frac * 4.0)
@@ -433,6 +459,100 @@ def _detect_red(grid, bbox, regions, base):
             "type": ftype, "region": rid, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
             "evidence": evidence,
+            "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+        })
+    return findings
+
+
+def _zone_color_ratios(grid, pts):
+    rr = gg = bb = 0
+    for x, y in pts:
+        r, g, b = grid.px[y * grid.w + x]
+        rr += r
+        gg += g
+        bb += b
+    return rr / max(1, gg), gg / max(1, bb)
+
+
+def _detect_diffuse_redness(grid, bbox, regions, base):
+    """
+    Разлитая краснота щёк/носа по индексу r/g (устойчив к теням: свет
+    масштабирует каналы одинаково). Тёплый баланс белого вычитается через g/b.
+    Симметричная краснота обеих щёк — «сосудистая краснота» (не диагноз).
+    """
+    findings = []
+    idx = {}
+    for rid in ("left_cheek", "right_cheek", "nose"):
+        pts = regions.get(rid) or []
+        if len(pts) < 40:
+            continue
+        rg_ratio, gb_ratio = _zone_color_ratios(grid, pts)
+        # компенсация тёплого света: желтизна (g/b) выше нейтральной ~1.15
+        redness_index = rg_ratio - 0.6 * max(0.0, gb_ratio - 1.15)
+        idx[rid] = (redness_index, pts)
+
+    threshold = 1.40
+    reds = {rid: v for rid, v in idx.items() if v[0] > threshold}
+    symmetric = "left_cheek" in reds and "right_cheek" in reds
+    cheek_mean = (
+        (reds["left_cheek"][0] + reds["right_cheek"][0]) / 2 if symmetric else 0.0
+    )
+    for rid, (index, pts) in reds.items():
+        # маркер — в центре самой красной четверти пикселей зоны (по r/g)
+        def px_ratio(p):
+            r, g, b = grid.px[p[1] * grid.w + p[0]]
+            return r / max(1, g)
+        top = sorted(pts, key=px_ratio, reverse=True)[: max(8, len(pts) // 4)]
+        cx = sum(p[0] for p in top) / len(top)
+        cy = sum(p[1] for p in top) / len(top)
+        bx0, by0 = min(p[0] for p in top), min(p[1] for p in top)
+        bx1, by1 = max(p[0] for p in top), max(p[1] for p in top)
+        rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
+        strength = min(1.0, (index - threshold) / 0.18)
+        conf = min(0.93, 0.5 + (index - threshold) * 1.6 + (0.12 if symmetric else 0.0))
+        rosacea = symmetric and cheek_mean > 1.43 and rid != "nose"
+        findings.append({
+            "type": "rosacea_like" if rosacea else "redness",
+            "region": rid, "region_label": rlabel,
+            "strength": strength, "confidence": round(conf, 2),
+            "evidence": (
+                "симметричная разлитая краснота щёк — сосудистая картина, не диагноз"
+                if rosacea
+                else "устойчивый красный подтон зоны независимо от освещения"
+            ),
+            "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+        })
+    return findings
+
+
+def _detect_nasolabial(grid, bbox, regions, base):
+    """Носогубные складки: выраженные линии-перепады в носогубных зонах."""
+    findings = []
+    for rid in ("left_nasolabial", "right_nasolabial"):
+        pts = regions.get(rid) or []
+        if len(pts) < 25:
+            continue
+        # зона с сильным красным избытком — след помады/улыбки, не складка
+        zone_rg = sum(grid.rg[y * grid.w + x] for x, y in pts) / len(pts)
+        if zone_rg - base["rg"] > 25:
+            continue
+        laps = [(grid.lap(x, y), x, y) for x, y in pts]
+        tex = sum(l[0] for l in laps) / len(laps)
+        ratio = tex / max(0.5, base["tex"])
+        if tex < 5.5 or ratio < 1.25:
+            continue
+        top = sorted(laps, reverse=True)[: max(5, len(laps) // 5)]
+        cx = sum(t[1] for t in top) / len(top)
+        cy = sum(t[2] for t in top) / len(top)
+        bx0, by0 = min(t[1] for t in top), min(t[2] for t in top)
+        bx1, by1 = max(t[1] for t in top), max(t[2] for t in top)
+        rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
+        strength = min(1.0, (ratio - 1.25) / 1.0 + (tex - 5.5) / 20.0)
+        conf = min(0.9, 0.5 + (ratio - 1.25) * 0.35 + tex / 70.0)
+        findings.append({
+            "type": "nasolabial", "region": rid, "region_label": rlabel,
+            "strength": strength, "confidence": round(conf, 2),
+            "evidence": "выраженная линия-перепад в носогубной зоне",
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
     return findings
@@ -483,8 +603,8 @@ def _detect_pigmentation(grid, bbox, regions, base):
         p = grid.px[i]
         brownish = p[0] > p[1] >= p[2] - 6
         deficit_px = base["luma"] - grid.luma[i]
-        # 24..58: темнее кожи, но не настолько, чтобы быть волосами/тенью от них
-        if 24 < deficit_px < 58 and brownish and grid.rg[i] - base["rg"] < 12:
+        # 20..58: темнее кожи, но не настолько, чтобы быть волосами/тенью от них
+        if 20 < deficit_px < 58 and brownish and grid.rg[i] - base["rg"] < 12:
             anomaly.add((x, y))
     face_area = max(1, len(skin_all))
     for pts in _components(anomaly, grid, min_area=5):
@@ -510,12 +630,14 @@ def _detect_pigmentation(grid, bbox, regions, base):
         rid, rlabel = _region_of(fx, fy)
         if rid not in zone_ids:
             continue
-        # верхняя кромка лба — зона прядей у линии роста волос, пропускаем
+        # края лица и верх лба — зоны прядей волос и теней, пропускаем
         if rid == "forehead" and fy < 0.20:
             continue
+        if fx < 0.14 or fx > 0.86:
+            continue
         deficit = sum(base["luma"] - grid.luma[y * grid.w + x] for x, y in pts) / len(pts)
-        strength = min(1.0, (deficit - 24) / 30.0)
-        conf = min(0.9, 0.48 + (deficit - 24) / 70.0 + min(0.1, area_frac * 15))
+        strength = min(1.0, (deficit - 20) / 30.0)
+        conf = min(0.9, 0.48 + (deficit - 20) / 70.0 + min(0.1, area_frac * 15))
         findings.append({
             "type": "pigmentation", "region": rid, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
@@ -523,7 +645,7 @@ def _detect_pigmentation(grid, bbox, regions, base):
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
     findings.sort(key=lambda f: f["confidence"], reverse=True)
-    return findings[:2]
+    return findings[:3]
 
 
 def _detect_texture(grid, bbox, regions, base):
@@ -576,14 +698,14 @@ def _detect_shine(grid, bbox, regions, base):
             if grid.luma[y * grid.w + x] - base["luma"] > 38
         ]
         frac = len(bright) / len(pts)
-        if frac < 0.22:
+        if frac < 0.18:
             continue
         cx = sum(p[0] for p in bright) / len(bright)
         cy = sum(p[1] for p in bright) / len(bright)
         bx0, by0 = min(p[0] for p in bright), min(p[1] for p in bright)
         bx1, by1 = max(p[0] for p in bright), max(p[1] for p in bright)
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
-        strength = min(1.0, (frac - 0.22) * 2.2 + 0.25)
+        strength = min(1.0, (frac - 0.18) * 2.2 + 0.22)
         conf = min(0.9, 0.55 + frac * 0.8)
         findings.append({
             "type": "shine", "region": rid, "region_label": rlabel,
@@ -595,12 +717,23 @@ def _detect_shine(grid, bbox, regions, base):
 
 
 def _detect_wrinkles(grid, bbox, regions, base):
-    """Горизонтальные линии лба и межбровные линии по направленным градиентам."""
+    """Линии лба, межбровья и под глазами по направленным градиентам."""
     findings = []
-    checks = [("forehead", "horizontal"), ("glabella", "vertical")]
-    for rid, direction in checks:
+    # Опорный уровень «гладкой кожи» — горизонтальные градиенты лба:
+    # мелкие линии под глазами видны как превышение над ним.
+    fh_pts = regions.get("forehead") or []
+    fh_gy = (
+        sum(grid.grad(x, y)[1] for x, y in fh_pts) / len(fh_pts) if len(fh_pts) > 30 else 2.0
+    )
+    checks = [
+        ("forehead", "horizontal", 4.2),
+        ("glabella", "vertical", 4.2),
+        ("left_under_eye", "horizontal", max(2.3, fh_gy * 1.7)),
+        ("right_under_eye", "horizontal", max(2.3, fh_gy * 1.7)),
+    ]
+    for rid, direction, floor in checks:
         pts = regions.get(rid) or []
-        if len(pts) < 40:
+        if len(pts) < 30:
             continue
         gx_sum = gy_sum = 0.0
         for x, y in pts:
@@ -611,11 +744,16 @@ def _detect_wrinkles(grid, bbox, regions, base):
         gy_m = gy_sum / len(pts)
         if direction == "horizontal":
             main, cross = gy_m, gx_m
-            evidence = "повторяющиеся горизонтальные линии на лбу"
+            evidence = (
+                "мелкие горизонтальные линии под глазом"
+                if "under_eye" in rid
+                else "повторяющиеся горизонтальные линии на лбу"
+            )
         else:
             main, cross = gx_m, gy_m
             evidence = "вертикальные линии в межбровной зоне"
-        if main < 4.2 or main < cross * 1.6:
+        ratio_floor = 1.05 if "under_eye" in rid else 1.6
+        if main < floor or main < cross * ratio_floor:
             continue
         strong = sorted(
             ((grid.grad(x, y)[1 if direction == "horizontal" else 0], x, y) for x, y in pts),
@@ -626,8 +764,9 @@ def _detect_wrinkles(grid, bbox, regions, base):
         bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
         bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
-        strength = min(1.0, (main - 4.2) / 6.0 + max(0.0, main / max(0.5, cross) - 1.35) * 0.5)
-        conf = min(0.9, 0.5 + (main - 4.2) / 12.0 + (main / max(0.5, cross) - 1.35) * 0.3)
+        conf_base = 0.54 if "under_eye" in rid else 0.5
+        strength = min(1.0, (main - floor) / 6.0 + max(0.0, main / max(0.5, cross) - ratio_floor) * 0.5)
+        conf = min(0.9, conf_base + (main - floor) / 12.0 + (main / max(0.5, cross) - ratio_floor) * 0.3)
         findings.append({
             "type": "wrinkles", "region": rid, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
@@ -686,16 +825,25 @@ def analyze(image_bytes):
 
     raw = []
     raw += _detect_red(grid, bbox, regions, base)
+    raw += _detect_diffuse_redness(grid, bbox, regions, base)
     raw += _detect_dark_circles(grid, bbox, regions, base)
     raw += _detect_pigmentation(grid, bbox, regions, base)
     raw += _detect_texture(grid, bbox, regions, base)
     raw += _detect_shine(grid, bbox, regions, base)
     raw += _detect_wrinkles(grid, bbox, regions, base)
+    raw += _detect_nasolabial(grid, bbox, regions, base)
 
     merged = _merge_findings(raw)
+    # Сосудистая краснота уже описывает щёки — не дублируем её ещё и
+    # обычной «краснотой» в тех же зонах.
+    if any(f["type"] == "rosacea_like" for f in merged):
+        merged = [
+            f for f in merged
+            if not (f["type"] == "redness" and "cheek" in f["region"])
+        ]
     findings = [f for f in merged if f["confidence"] >= CONF_FLOOR]
     findings.sort(key=lambda f: (f["confidence"] + f["strength"]), reverse=True)
-    findings = findings[:6]
+    findings = findings[:MAX_FINDINGS]
 
     for f in findings:
         f["severity"] = _severity(f["strength"])
@@ -706,10 +854,13 @@ def analyze(image_bytes):
     # Глобальные ориентиры для подбора продуктов (та же пиксельная база).
     shine_strength = max((f["strength"] for f in findings if f["type"] == "shine"), default=0.0)
     red_strength = max(
-        (f["strength"] for f in findings if f["type"] in ("redness", "inflammation")), default=0.0
+        (f["strength"] for f in findings if f["type"] in ("redness", "inflammation", "rosacea_like")),
+        default=0.0,
     )
     pores_strength = max((f["strength"] for f in findings if f["type"] == "pores"), default=0.0)
-    wrinkle_strength = max((f["strength"] for f in findings if f["type"] == "wrinkles"), default=0.0)
+    wrinkle_strength = max(
+        (f["strength"] for f in findings if f["type"] in ("wrinkles", "nasolabial")), default=0.0
+    )
     dark_strength = max(
         (f["strength"] for f in findings if f["type"] in ("dark_circles", "pigmentation")),
         default=0.0,

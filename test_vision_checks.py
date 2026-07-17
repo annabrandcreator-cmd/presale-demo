@@ -166,8 +166,9 @@ def t_sync():
     zone_ids = {z["metric_id"] for z in scan["zones"]}
     feature_ids = {f["id"] for f in scan["features"]}
     assert zone_ids == feature_ids, f"теги {zone_ids} != строки {feature_ids}"
+    from cosmetic_vision import CONF_FLOOR
     for f in scan["features"]:
-        assert f["confidence"] >= 0.7, f"показан признак с низкой уверенностью: {f}"
+        assert f["confidence"] >= CONF_FLOOR, f"показан признак с низкой уверенностью: {f}"
         assert f["severity_label"] in ("слабая", "умеренная", "выраженная")
 results.append(run("теги и «Видимые особенности» из одного результата", t_sync))
 

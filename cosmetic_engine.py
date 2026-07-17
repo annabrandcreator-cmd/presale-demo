@@ -457,11 +457,13 @@ def session_summary(answers, routine, catalog):
 _FEATURE_CONCERN = {
     "inflammation": "acne",
     "redness": "sensitivity",
+    "rosacea_like": "sensitivity",
     "pigmentation": "dullness",
     "dark_circles": "dullness",
     "pores": "pores",
     "shine": "pores",
     "wrinkles": "aging",
+    "nasolabial": "lifting",
     "dryness": "dryness",
 }
 
@@ -472,6 +474,7 @@ _CONCERN_TIPS = {
     "dullness": "Добавим мягкое обновление и антиоксиданты для тона.",
     "aging": "Плотность + SPF — база; ретинол только если кожа готова.",
     "acne": "Мягкое очищение и точечный уход без пересушивания кожи.",
+    "lifting": "Работа с упругостью: пептиды, массаж и обязательный SPF.",
 }
 
 
@@ -543,9 +546,9 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         for i, f in enumerate(items):
             zones.append(_zone_dict(f, i))
 
-    # Не перегружаем карточку: максимум 4 типа (самые уверенные и выраженные).
+    # До 6 типов признаков — самые уверенные и выраженные первыми.
     features.sort(key=lambda f: f["confidence"] + f["score"] / 100.0, reverse=True)
-    features = features[:4]
+    features = features[:6]
     kept_types = {f["id"] for f in features}
     zones = [z for z in zones if z["metric_id"] in kept_types]
 
