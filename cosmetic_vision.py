@@ -131,9 +131,12 @@ def _detect_face_haar(img):
         min_side = max(48, round(min(gray.shape) * 0.18))
         faces = cascade.detectMultiScale(gray, 1.1, 5, minSize=(min_side, min_side))
         if faces is None or len(faces) == 0:
-            # второй проход чуть мягче — ловим дальние/частичные селфи
+            # второй проход чуть мягче — дальние селфи, но не «поллица»
             soft = max(40, round(min(gray.shape) * 0.12))
             faces = cascade.detectMultiScale(gray, 1.08, 4, minSize=(soft, soft))
+            soft_pass = True
+        else:
+            soft_pass = False
         if faces is None or len(faces) == 0:
             return _FACE_MISSING
         x, y, fw, fh = max(faces, key=lambda f: f[2] * f[3])
@@ -141,6 +144,12 @@ def _detect_face_haar(img):
         # лицо должно занимать заметную долю кадра (не «случайный» квадрат на фоне)
         if (fw * fh) / max(1, sw * sh) < 0.04:
             return _FACE_MISSING
+        # Мягкий проход: отсекаем явные обрезы по краю сразу.
+        if soft_pass:
+            if x <= 2 or y <= 2 or (x + fw) >= sw - 2 or (y + fh) >= sh - 2:
+                return _FACE_MISSING
+            if (x + fw / 2) / sw < 0.28 or (x + fw / 2) / sw > 0.72:
+                return _FACE_MISSING
         # расширяем бокс вверх на лоб (каскад начинает от бровей/середины лба)
         top = max(0.0, (y - 0.18 * fh) / sh)
         return (x / sw, top, (x + fw) / sw, min(1.0, (y + fh * 1.02) / sh))
@@ -280,7 +289,7 @@ def _face_bbox(grid):
 # ── Качество фото ────────────────────────────────────────────────────────────
 
 
-def _check_quality(grid, bbox):
+def _check_quality(grid, bbox, source_img=None, face_frac=None):
     x0, y0, x1, y1 = bbox
     lumas, sharp = [], []
     for y in range(y0, y1 + 1):
@@ -300,12 +309,109 @@ def _check_quality(grid, bbox):
         raise PhotoQualityError(
             "Фото пересвечено — детали кожи не видны. Попробуйте мягкий рассеянный свет."
         )
-    if mean_sharp < 1.1:
+    # Сетка грубая: порог выше прежнего 1.1, чтобы отсекать заметно
+    # «мягкие»/размытые селфи, которые раньше проходили анализ.
+    if mean_sharp < 2.4:
         raise PhotoQualityError(
             "Фото размыто или сильно сглажено фильтром. "
             "Сделайте чёткий снимок без фильтров."
         )
-    return {"mean_luma": round(mean_luma, 1), "sharpness": round(mean_sharp, 2)}
+    # Доп. проверка на исходном разрешении (variance of Laplacian).
+    lap_var = _face_laplacian_variance(source_img, face_frac) if source_img and face_frac else None
+    if lap_var is not None and lap_var < 55.0:
+        raise PhotoQualityError(
+            "Фото размыто или не в фокусе. "
+            "Сделайте чёткий снимок анфас при дневном свете, без движения камеры."
+        )
+    quality = {"mean_luma": round(mean_luma, 1), "sharpness": round(mean_sharp, 2)}
+    if lap_var is not None:
+        quality["lap_var"] = round(lap_var, 1)
+    return quality
+
+
+def _face_laplacian_variance(img, face_frac):
+    """Variance of Laplacian по кропу лица — классический тест на blur."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return None
+    if not face_frac or img is None:
+        return None
+    w, h = img.size
+    x0 = max(0, int(face_frac[0] * w))
+    y0 = max(0, int(face_frac[1] * h))
+    x1 = min(w, int(face_frac[2] * w))
+    y1 = min(h, int(face_frac[3] * h))
+    if x1 - x0 < 24 or y1 - y0 < 24:
+        return None
+    crop = img.crop((x0, y0, x1, y1)).convert("L")
+    # Нормализуем размер, чтобы порог был стабилен для разных камер.
+    target = 180
+    cw, ch = crop.size
+    scale = target / max(cw, ch)
+    if scale < 1.0:
+        crop = crop.resize((max(24, round(cw * scale)), max(24, round(ch * scale))))
+    arr = np.asarray(crop, dtype=np.uint8)
+    return float(cv2.Laplacian(arr, cv2.CV_64F).var())
+
+
+def _validate_face_framing(face_frac, grid, bbox):
+    """
+    Отклоняет кадры, где лицо обрезано краем или видна только половина.
+    face_frac — доли кадра (Haar), bbox — пиксели сетки.
+    """
+    fx0, fy0, fx1, fy1 = face_frac
+    fw, fh = fx1 - fx0, fy1 - fy0
+    cx = (fx0 + fx1) / 2.0
+
+    # Лицо слишком маленькое в кадре — нельзя оценить зоны.
+    if fw < 0.18 or fh < 0.22 or (fw * fh) < 0.055:
+        raise PhotoQualityError(
+            "Лицо слишком далеко или мелко в кадре. "
+            "Сделайте селфи ближе, анфас, чтобы лицо занимало большую часть кадра."
+        )
+
+    # Обрезка по бокам / сверху / снизу.
+    side_hit = fx0 <= 0.03 or fx1 >= 0.97
+    top_hit = fy0 <= 0.01
+    bottom_hit = fy1 >= 0.99
+    if side_hit or (top_hit and fh > 0.55) or (bottom_hit and fy0 > 0.25):
+        raise PhotoQualityError(
+            "Лицо обрезано краем кадра. "
+            "Поместите лицо целиком в кадр анфас — без обрезанного подбородка или щеки."
+        )
+    # Сильный сдвиг в сторону — типичный «поллица».
+    if cx < 0.30 or cx > 0.70:
+        raise PhotoQualityError(
+            "Лицо смещено и частично вне кадра. "
+            "Сделайте селфи по центру, анфас, чтобы было видно всё лицо."
+        )
+
+    # Обе половины бокса должны содержать кожу (иначе видна одна щека).
+    x0, y0, x1, y1 = bbox
+    mid = (x0 + x1) // 2
+    left = right = 0
+    for y in range(y0, y1 + 1):
+        row = y * grid.w
+        for x in range(x0, mid + 1):
+            if grid.skin[row + x]:
+                left += 1
+        for x in range(mid, x1 + 1):
+            if grid.skin[row + x]:
+                right += 1
+    total = left + right
+    if total < 30:
+        raise PhotoQualityError(
+            "На фото плохо различима кожа лица. "
+            "Сделайте селфи анфас при дневном свете без сильных фильтров."
+        )
+    balance = min(left, right) / max(left, right)
+    if balance < 0.32:
+        raise PhotoQualityError(
+            "На фото видно только часть лица. "
+            "Сделайте селфи анфас по центру кадра, без обрезанной половины лица."
+        )
 
 
 # ── Зоны ─────────────────────────────────────────────────────────────────────
@@ -1234,7 +1340,14 @@ def analyze(image_bytes):
     if face is _FACE_NO_CV:
         # Без OpenCV — только строгий fallback по крупнейшей области кожи.
         bbox = _face_bbox(grid)
+        face_frac = (
+            bbox[0] / max(1, w - 1),
+            bbox[1] / max(1, h - 1),
+            bbox[2] / max(1, w - 1),
+            bbox[3] / max(1, h - 1),
+        )
     else:
+        face_frac = face
         bbox = (
             max(0, int(face[0] * w)), max(0, int(face[1] * h)),
             min(w - 1, int(face[2] * w)), min(h - 1, int(face[3] * h)),
@@ -1252,7 +1365,8 @@ def analyze(image_bytes):
                 "Сделайте селфи анфас без фильтров при дневном свете."
             )
 
-    quality = _check_quality(grid, bbox)
+    _validate_face_framing(face_frac, grid, bbox)
+    quality = _check_quality(grid, bbox, source_img=img, face_frac=face_frac)
     regions, face_pixels = _collect_region_pixels(grid, bbox)
     base = _baseline(grid, face_pixels)
 

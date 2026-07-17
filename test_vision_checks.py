@@ -132,8 +132,33 @@ def t_blur():
         cosmetic_engine.analyze_skin_photo(to_bytes(img))
         raise AssertionError("размытое фото не отклонено")
     except ValueError as e:
-        assert "размыт" in str(e) or "фильтр" in str(e), str(e)
+        assert "размыт" in str(e) or "фильтр" in str(e) or "фокус" in str(e), str(e)
 results.append(run("размытое фото — запрашиваем новое", t_blur))
+
+# 6b. Умеренное размытие (раньше проходило) → тоже отклоняем
+def t_blur_moderate():
+    img = base_face().filter(ImageFilter.GaussianBlur(4))
+    try:
+        cosmetic_engine.analyze_skin_photo(to_bytes(img))
+        raise AssertionError("умеренно размытое фото не отклонено")
+    except ValueError as e:
+        assert "размыт" in str(e) or "фильтр" in str(e) or "фокус" in str(e), str(e)
+results.append(run("умеренно размытое фото — запрашиваем новое", t_blur_moderate))
+
+# 6c. Лицо обрезано краем кадра → просим другое
+def t_face_cropped():
+    img = base_face()
+    canvas = Image.new("RGB", (W, H), (120, 122, 126))
+    # сдвигаем лицо влево — правая половина уходит за край
+    face = img.crop((140, 100, 500, 720))
+    canvas.paste(face, (-120, 100))
+    try:
+        cosmetic_engine.analyze_skin_photo(to_bytes(canvas))
+        raise AssertionError("обрезанное лицо не отклонено")
+    except ValueError as e:
+        msg = str(e).lower()
+        assert ("лиц" in msg or "кадр" in msg or "обрез" in msg or "смещен" in msg), str(e)
+results.append(run("обрезанное лицо — запрашиваем новое", t_face_cropped))
 
 # 7. Нет лица (пейзаж) → просим другое
 def t_no_face():
