@@ -32,8 +32,9 @@ _REGIONS = [
     ("nose", "Нос", 0.41, 0.42, 0.59, 0.66),
     ("left_nasolabial", "Носогубная зона слева", 0.26, 0.64, 0.38, 0.78),
     ("right_nasolabial", "Носогубная зона справа", 0.62, 0.64, 0.74, 0.78),
-    ("left_cheek", "Щека слева", 0.10, 0.58, 0.39, 0.82),
-    ("right_cheek", "Щека справа", 0.61, 0.58, 0.90, 0.82),
+    # Щёки: внутренний «яблоко» — не край силуэта и не челюсть.
+    ("left_cheek", "Щека слева", 0.16, 0.52, 0.40, 0.74),
+    ("right_cheek", "Щека справа", 0.60, 0.52, 0.84, 0.74),
     ("upper_lip", "Над верхней губой", 0.41, 0.66, 0.59, 0.71),
     ("chin", "Подбородок", 0.36, 0.90, 0.64, 1.0),
 ]
@@ -98,31 +99,51 @@ def _decode(image_bytes):
     return img, list(small.getdata()), GRID_W, grid_h
 
 
+# Служебные маркеры результата детекции лица.
+_FACE_MISSING = object()   # OpenCV доступен, лица нет
+_FACE_NO_CV = object()     # OpenCV недоступен — только тогда fallback по коже
+
+
 def _detect_face_haar(img):
-    """Позиция лица каскадом OpenCV; None, если cv2 недоступен или лица нет."""
+    """
+    Позиция лица каскадом OpenCV.
+    Возвращает (x0,y0,x1,y1) в долях кадра, либо _FACE_MISSING / _FACE_NO_CV.
+    """
     try:
         import cv2
         import numpy as np
+        if not hasattr(cv2, "CascadeClassifier"):
+            return _FACE_NO_CV
     except ImportError:
-        return None
-    w, h = img.size
-    scale = min(1.0, 760.0 / max(w, h))
-    small = img.resize((max(1, round(w * scale)), max(1, round(h * scale)))) if scale < 1.0 else img
-    gray = np.asarray(small.convert("L"))
-    cascade = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    )
-    if cascade.empty():
-        return None
-    min_side = max(48, round(min(gray.shape) * 0.18))
-    faces = cascade.detectMultiScale(gray, 1.1, 5, minSize=(min_side, min_side))
-    if faces is None or len(faces) == 0:
-        return None
-    x, y, fw, fh = max(faces, key=lambda f: f[2] * f[3])
-    sw, sh = small.size
-    # расширяем бокс вверх на лоб (каскад начинает от бровей/середины лба)
-    top = max(0.0, (y - 0.18 * fh) / sh)
-    return (x / sw, top, (x + fw) / sw, min(1.0, (y + fh * 1.02) / sh))
+        return _FACE_NO_CV
+    try:
+        w, h = img.size
+        scale = min(1.0, 760.0 / max(w, h))
+        small = img.resize((max(1, round(w * scale)), max(1, round(h * scale)))) if scale < 1.0 else img
+        gray = np.asarray(small.convert("L"))
+        cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+        if cascade.empty():
+            return _FACE_NO_CV
+        min_side = max(48, round(min(gray.shape) * 0.18))
+        faces = cascade.detectMultiScale(gray, 1.1, 5, minSize=(min_side, min_side))
+        if faces is None or len(faces) == 0:
+            # второй проход чуть мягче — ловим дальние/частичные селфи
+            soft = max(40, round(min(gray.shape) * 0.12))
+            faces = cascade.detectMultiScale(gray, 1.08, 4, minSize=(soft, soft))
+        if faces is None or len(faces) == 0:
+            return _FACE_MISSING
+        x, y, fw, fh = max(faces, key=lambda f: f[2] * f[3])
+        sw, sh = small.size
+        # лицо должно занимать заметную долю кадра (не «случайный» квадрат на фоне)
+        if (fw * fh) / max(1, sw * sh) < 0.04:
+            return _FACE_MISSING
+        # расширяем бокс вверх на лоб (каскад начинает от бровей/середины лба)
+        top = max(0.0, (y - 0.18 * fh) / sh)
+        return (x / sw, top, (x + fw) / sw, min(1.0, (y + fh * 1.02) / sh))
+    except Exception:
+        return _FACE_NO_CV
 
 
 # ── Сегментация кожи ─────────────────────────────────────────────────────────
@@ -203,11 +224,21 @@ def _largest_skin_component(grid):
 def _face_bbox(grid):
     """Резерв без OpenCV: верх крупнейшей связной области кожи (до линии шеи)."""
     comp = _largest_skin_component(grid)
-    if len(comp) < grid.w * grid.h * 0.05:
+    frame = grid.w * grid.h
+    if len(comp) < frame * 0.05:
         raise PhotoQualityError(
             "Не получилось уверенно найти лицо: оно перекрыто, далеко или слабо освещено. "
             "Сделайте селфи анфас при дневном свете."
         )
+    # Плоская «кожа» на весь кадр (потолок, стена) — не лицо.
+    if len(comp) > frame * 0.55:
+        tex = sum(grid.lap(i % grid.w, i // grid.w) for i in comp[:: max(1, len(comp) // 400)])
+        tex /= max(1, len(comp[:: max(1, len(comp) // 400)]))
+        if tex < 3.5:
+            raise PhotoQualityError(
+                "На фото не видно лица. Сделайте селфи анфас при дневном свете, "
+                "без сильных фильтров и перекрытий."
+            )
     rows = {}
     for i in comp:
         rows.setdefault(i // grid.w, []).append(i % grid.w)
@@ -397,6 +428,97 @@ def _face_frac(fx, fy, bbox):
     return (fx - x0) / max(1, x1 - x0), (fy - y0) / max(1, y1 - y0)
 
 
+def _skin_ring_fraction(pts, skin_all, radius=2):
+    """Доля соседних пикселей вокруг компоненты, которые тоже кожа."""
+    pts_set = pts if isinstance(pts, set) else set(pts)
+    ring = set()
+    for x, y in pts_set:
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                if dx == 0 and dy == 0:
+                    continue
+                n = (x + dx, y + dy)
+                if n not in pts_set:
+                    ring.add(n)
+    if not ring:
+        return 1.0
+    return sum(1 for p in ring if p in skin_all) / len(ring)
+
+
+def _local_skin_frac(x, y, skin_all, radius=2):
+    neigh = [
+        (x + dx, y + dy)
+        for dx in range(-radius, radius + 1)
+        for dy in range(-radius, radius + 1)
+    ]
+    return sum(1 for p in neigh if p in skin_all) / len(neigh)
+
+
+def _pick_interior_centroid(pts, bbox, skin_all, score_fn=None, min_local=0.78):
+    """
+    Центроид маркера только по внутренним пикселям аномалии.
+    Отсекает край силуэта/фон; для щёк смещает точку к центру лица.
+    Возвращает (cx, cy, bx0, by0, bx1, by1) или None.
+    """
+    if not pts:
+        return None
+    scored = []
+    for x, y in pts:
+        if _local_skin_frac(x, y, skin_all) < min_local:
+            continue
+        fx, fy = _face_frac(x, y, bbox)
+        # край bbox / волосы / фон — не ставим маркер
+        if fx < 0.18 or fx > 0.82 or fy < 0.14 or fy > 0.90:
+            continue
+        base = score_fn((x, y)) if score_fn else 1.0
+        # inward: дальше от наружного контура щёк
+        inward = 1.0 - max(0.0, 0.22 - fx) * 4.0 - max(0.0, fx - 0.78) * 4.0
+        inward *= 1.0 - abs(fx - 0.50) * 0.55
+        # mid-cheek: не уезжать к челюсти
+        mid_y = 1.0 - max(0.0, fy - 0.72) * 2.8
+        mid_y *= 1.0 - max(0.0, 0.48 - fy) * 1.5
+        scored.append((base * max(0.12, inward) * max(0.18, mid_y), x, y))
+    if len(scored) < 3:
+        # запасной проход: чуть мягче по локальной коже, но силуэт всё равно режем
+        scored = []
+        for x, y in pts:
+            if _local_skin_frac(x, y, skin_all, radius=1) < 0.65:
+                continue
+            fx, fy = _face_frac(x, y, bbox)
+            if fx < 0.20 or fx > 0.80 or fy > 0.88:
+                continue
+            base = score_fn((x, y)) if score_fn else 1.0
+            scored.append((base * (1.0 - abs(fx - 0.5)), x, y))
+    if not scored:
+        return None
+    scored.sort(reverse=True)
+    top = scored[: max(6, len(scored) // 5)]
+    xs = [t[1] for t in top]
+    ys = [t[2] for t in top]
+    cx = sum(xs) / len(xs)
+    cy = sum(ys) / len(ys)
+    fx, fy = _face_frac(cx, cy, bbox)
+    x0, y0, x1, y1 = bbox
+    fw, fh = max(1, x1 - x0), max(1, y1 - y0)
+    # финальный soft-clamp внутрь лица
+    if fx < 0.22:
+        cx = x0 + 0.26 * fw
+        fx = 0.26
+    elif fx > 0.78:
+        cx = x0 + 0.74 * fw
+        fx = 0.74
+    if fy > 0.76:
+        cy = y0 + 0.68 * fh
+    # точка должна остаться на коже (после clamp)
+    ix, iy = int(round(cx)), int(round(cy))
+    if (ix, iy) not in skin_all and _local_skin_frac(ix, iy, skin_all, radius=1) < 0.5:
+        # ближайший кандидат из top
+        cx, cy = top[0][1], top[0][2]
+    bx0, by0 = min(xs), min(ys)
+    bx1, by1 = max(xs), max(ys)
+    return cx, cy, bx0, by0, bx1, by1
+
+
 # ── Детекторы признаков ──────────────────────────────────────────────────────
 
 
@@ -405,6 +527,7 @@ def _detect_red(grid, bbox, regions, base):
     findings = []
     region_pts = {rid: set(pts) for rid, pts in regions.items()}
     allowed = set().union(*region_pts.values()) if region_pts else set()
+    skin_all = set(allowed)
 
     # Типичный красный тон самих губ (центр рта): чтобы отличать помаду и
     # уголки губ от настоящих воспалений рядом со ртом.
@@ -425,7 +548,15 @@ def _detect_red(grid, bbox, regions, base):
     }
     face_area = max(1, len(allowed))
     for pts in _components(anomaly, grid, min_area=3):
-        cx, cy, bx0, by0, bx1, by1 = _comp_geometry(pts)
+        if _skin_ring_fraction(pts, skin_all) < 0.68:
+            continue
+        geom = _pick_interior_centroid(
+            pts, bbox, skin_all,
+            score_fn=lambda p: grid.rg[p[1] * grid.w + p[0]] - base["rg"],
+        )
+        if not geom:
+            continue
+        cx, cy, bx0, by0, bx1, by1 = geom
         fx, fy = _face_frac(cx, cy, bbox)
         rid, rlabel = _region_of(fx, fy)
         if not rid:
@@ -481,6 +612,9 @@ def _detect_diffuse_redness(grid, bbox, regions, base):
     Симметричная краснота обеих щёк — «сосудистая краснота» (не диагноз).
     """
     findings = []
+    skin_all = set()
+    for pts in regions.values():
+        skin_all.update(pts)
     idx = {}
     for rid in ("left_cheek", "right_cheek", "nose"):
         pts = regions.get(rid) or []
@@ -498,15 +632,19 @@ def _detect_diffuse_redness(grid, bbox, regions, base):
         (reds["left_cheek"][0] + reds["right_cheek"][0]) / 2 if symmetric else 0.0
     )
     for rid, (index, pts) in reds.items():
-        # маркер — в центре самой красной четверти пикселей зоны (по r/g)
+        # маркер — плотнейшие красные пиксели внутри зоны (не край/челюсть)
         def px_ratio(p):
             r, g, b = grid.px[p[1] * grid.w + p[0]]
             return r / max(1, g)
-        top = sorted(pts, key=px_ratio, reverse=True)[: max(8, len(pts) // 4)]
-        cx = sum(p[0] for p in top) / len(top)
-        cy = sum(p[1] for p in top) / len(top)
-        bx0, by0 = min(p[0] for p in top), min(p[1] for p in top)
-        bx1, by1 = max(p[0] for p in top), max(p[1] for p in top)
+
+        geom = _pick_interior_centroid(pts, bbox, skin_all, score_fn=px_ratio)
+        if not geom:
+            continue
+        cx, cy, bx0, by0, bx1, by1 = geom
+        fx, fy = _face_frac(cx, cy, bbox)
+        # для щёк дополнительно отсекаем наружный силуэт
+        if "cheek" in rid and (fx < 0.20 or fx > 0.80 or fy > 0.74):
+            continue
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
         strength = min(1.0, (index - threshold) / 0.18)
         conf = min(0.93, 0.5 + (index - threshold) * 1.6 + (0.12 if symmetric else 0.0))
@@ -611,21 +749,21 @@ def _detect_pigmentation(grid, bbox, regions, base):
         area_frac = len(pts) / face_area
         if area_frac > 0.02:  # большое тёмное поле — тень или волосы
             continue
-        cx, cy, bx0, by0, bx1, by1 = _comp_geometry(pts)
         # пятно должно быть компактным, а не полосой вдоль края лица
+        _, _, bx0, by0, bx1, by1 = _comp_geometry(pts)
         if (bx1 - bx0 + 1) * (by1 - by0 + 1) > len(pts) * 3.0:
             continue
         # окружение пятна должно быть кожей: пигментация лежит внутри кожи,
         # тени от волос примыкают к границе лица
-        ring = set()
-        for x, y in pts:
-            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1),
-                           (x + 2, y), (x - 2, y), (x, y + 2), (x, y - 2)):
-                if (nx, ny) not in pts:
-                    ring.add((nx, ny))
-        skin_ring = sum(1 for p in ring if p in skin_all)
-        if ring and skin_ring / len(ring) < 0.75:
+        if _skin_ring_fraction(pts, skin_all) < 0.85:
             continue
+        geom = _pick_interior_centroid(
+            pts, bbox, skin_all,
+            score_fn=lambda p: base["luma"] - grid.luma[p[1] * grid.w + p[0]],
+        )
+        if not geom:
+            continue
+        cx, cy, bx0, by0, bx1, by1 = geom
         fx, fy = _face_frac(cx, cy, bbox)
         rid, rlabel = _region_of(fx, fy)
         if rid not in zone_ids:
@@ -633,7 +771,9 @@ def _detect_pigmentation(grid, bbox, regions, base):
         # края лица и верх лба — зоны прядей волос и теней, пропускаем
         if rid == "forehead" and fy < 0.20:
             continue
-        if fx < 0.14 or fx > 0.86:
+        if fx < 0.20 or fx > 0.80:
+            continue
+        if "cheek" in rid and (fx < 0.22 or fx > 0.78):
             continue
         deficit = sum(base["luma"] - grid.luma[y * grid.w + x] for x, y in pts) / len(pts)
         strength = min(1.0, (deficit - 20) / 30.0)
@@ -651,6 +791,9 @@ def _detect_pigmentation(grid, bbox, regions, base):
 def _detect_texture(grid, bbox, regions, base):
     """Расширенные поры / неровная текстура по микроконтрасту зоны."""
     findings = []
+    skin_all = set()
+    for pts in regions.values():
+        skin_all.update(pts)
     for rid in ("nose", "left_cheek", "right_cheek", "chin", "forehead"):
         pts = regions.get(rid) or []
         if len(pts) < 40:
@@ -660,20 +803,28 @@ def _detect_texture(grid, bbox, regions, base):
         pts = [
             (x, y) for x, y in pts
             if all((x + dx, y + dy) in pset
-                   for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+                   for dx in (-2, -1, 0, 1, 2) for dy in (-2, -1, 0, 1, 2)
+                   if abs(dx) + abs(dy) <= 2)
         ]
         if len(pts) < 40:
+            continue
+        if _skin_ring_fraction(pts, skin_all, radius=3) < 0.82:
             continue
         laps = [(grid.lap(x, y), x, y) for x, y in pts]
         tex = sum(l[0] for l in laps) / len(laps)
         ratio = tex / max(0.5, base["tex"])
         if tex < 7.5 or ratio < 1.3:
             continue
-        top = sorted(laps, reverse=True)[: max(6, len(laps) // 10)]
-        cx = sum(t[1] for t in top) / len(top)
-        cy = sum(t[2] for t in top) / len(top)
-        bx0, by0 = min(t[1] for t in top), min(t[2] for t in top)
-        bx1, by1 = max(t[1] for t in top), max(t[2] for t in top)
+        geom = _pick_interior_centroid(
+            pts, bbox, skin_all,
+            score_fn=lambda p: grid.lap(p[0], p[1]),
+        )
+        if not geom:
+            continue
+        cx, cy, bx0, by0, bx1, by1 = geom
+        fx, fy = _face_frac(cx, cy, bbox)
+        if "cheek" in rid and (fx < 0.22 or fx > 0.78 or fy > 0.74):
+            continue
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
         strength = min(1.0, (ratio - 1.3) / 1.2 + (tex - 7.5) / 25.0)
         conf = min(0.93, 0.5 + (ratio - 1.3) * 0.4 + tex / 80.0)
@@ -799,11 +950,20 @@ def analyze(image_bytes):
     img, px, w, h = _decode(image_bytes)
     grid = _Grid(px, w, h)
 
-    norm = _detect_face_haar(img)
-    if norm:
+    face = _detect_face_haar(img)
+    if face is _FACE_MISSING:
+        # OpenCV уверенно сказал «лица нет» — не угадываем по цвету штукатурки/потолка.
+        raise PhotoQualityError(
+            "На фото не видно лица. Сделайте селфи анфас при дневном свете, "
+            "без сильных фильтров и перекрытий."
+        )
+    if face is _FACE_NO_CV:
+        # Без OpenCV — только строгий fallback по крупнейшей области кожи.
+        bbox = _face_bbox(grid)
+    else:
         bbox = (
-            max(0, int(norm[0] * w)), max(0, int(norm[1] * h)),
-            min(w - 1, int(norm[2] * w)), min(h - 1, int(norm[3] * h)),
+            max(0, int(face[0] * w)), max(0, int(face[1] * h)),
+            min(w - 1, int(face[2] * w)), min(h - 1, int(face[3] * h)),
         )
         x0, y0, x1, y1 = bbox
         area = max(1, (x1 - x0 + 1) * (y1 - y0 + 1))
@@ -811,13 +971,12 @@ def analyze(image_bytes):
             1 for yy in range(y0, y1 + 1) for xx in range(x0, x1 + 1)
             if grid.skin[yy * w + xx]
         )
-        if skin_in_box / area < 0.22:
+        # Потолок/стена иногда дают ложный бокс Haar — без кожи внутри это не лицо.
+        if skin_in_box / area < 0.28:
             raise PhotoQualityError(
-                "Кожа на лице плохо различима — мешают фильтр, плотный макияж или освещение. "
-                "Сделайте снимок без фильтров при дневном свете."
+                "На фото не видно лица или кожа плохо различима. "
+                "Сделайте селфи анфас без фильтров при дневном свете."
             )
-    else:
-        bbox = _face_bbox(grid)
 
     quality = _check_quality(grid, bbox)
     regions, face_pixels = _collect_region_pixels(grid, bbox)

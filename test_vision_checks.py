@@ -119,7 +119,7 @@ def t_dark():
         cosmetic_engine.analyze_skin_photo(to_bytes(base_face(brightness=0.25)))
         raise AssertionError("тёмное фото не отклонено")
     except ValueError as e:
-        assert "тёмн" in str(e) or "лицо" in str(e).lower() or "освещ" in str(e), str(e)
+        assert "тёмн" in str(e) or "лиц" in str(e).lower() or "освещ" in str(e), str(e)
 results.append(run("тёмное фото — запрашиваем новое", t_dark))
 
 # 6. Размытое фото → просим другое
@@ -140,9 +140,33 @@ def t_no_face():
     try:
         cosmetic_engine.analyze_skin_photo(to_bytes(img))
         raise AssertionError("фото без лица не отклонено")
-    except ValueError:
-        pass
+    except ValueError as e:
+        assert "лиц" in str(e).lower(), str(e)
 results.append(run("фото без лица — запрашиваем новое", t_no_face))
+
+# 7b. Потолок / штукатурка телесного тона — тоже не лицо
+def t_ceiling():
+    img = Image.new("RGB", (W, H), (214, 188, 168))
+    px = img.load()
+    rnd = random.Random(3)
+    for y in range(H):
+        for x in range(W):
+            n = rnd.randint(-8, 8)
+            r, g, b = px[x, y]
+            px[x, y] = (
+                max(0, min(255, r + n)),
+                max(0, min(255, g + n)),
+                max(0, min(255, b + n)),
+            )
+    # лёгкая «лампа» — круг ярче, как на потолке
+    d = ImageDraw.Draw(img)
+    d.ellipse([220, 260, 420, 460], fill=(232, 210, 190))
+    try:
+        cosmetic_engine.analyze_skin_photo(to_bytes(img))
+        raise AssertionError("фото потолка не отклонено")
+    except ValueError as e:
+        assert "лиц" in str(e).lower(), str(e)
+results.append(run("потолок вместо лица — запрашиваем новое", t_ceiling))
 
 # 8. Тени под глазами не становятся пигментацией на щеках
 def t_under_eye():
@@ -171,6 +195,47 @@ def t_sync():
         assert f["confidence"] >= CONF_FLOOR, f"показан признак с низкой уверенностью: {f}"
         assert f["severity_label"] in ("слабая", "умеренная", "выраженная")
 results.append(run("теги и «Видимые особенности» из одного результата", t_sync))
+
+# 10. Маркер на щеке — внутри лица, не на крайнем силуэте
+def t_cheek_inward():
+    img = base_face()
+    d = ImageDraw.Draw(img)
+    # тёмное пигментное пятно глубоко на левой щеке (не у края эллипса)
+    d.ellipse([250, 470, 290, 510], fill=(155, 118, 98))
+    # текстурный шум пор в центре той же щеки
+    px = img.load()
+    for y in range(460, 520):
+        for x in range(245, 295):
+            r, g, b = px[x, y]
+            n = ((x * 17 + y * 13) % 11) - 5
+            px[x, y] = (max(0, min(255, r + n * 3)),
+                        max(0, min(255, g + n)),
+                        max(0, min(255, b + n)))
+    scan = cosmetic_engine.analyze_skin_photo(to_bytes(img))
+    cheek = [
+        z for z in scan["zones"]
+        if "cheek" in (z.get("region") or "")
+        or "Щека" in (z.get("area") or "")
+    ]
+    # если нашли щечные зоны — они должны быть inward (не край кадра лица)
+    for z in cheek:
+        # лицо-эллипс ≈ x 140..500 → в % кадра ~22..78; край силуэта ~22/78
+        assert 26.0 <= z["x"] <= 74.0, \
+            f"маркер на краю силуэта: x={z['x']}% ({z['metric_id']}, {z.get('region')})"
+        assert 38.0 <= z["y"] <= 72.0, \
+            f"маркер слишком низко/высоко: y={z['y']}% ({z['metric_id']})"
+    # отдельный кейс: красное пятно у самого края щеки не должно дать маркер на контуре
+    img2 = base_face()
+    d2 = ImageDraw.Draw(img2)
+    d2.ellipse([148, 500, 175, 540], fill=(200, 95, 90))  # почти на краю эллипса
+    d2.ellipse([250, 470, 285, 505], fill=(220, 105, 100))  # настоящее внутри
+    scan2 = cosmetic_engine.analyze_skin_photo(to_bytes(img2))
+    reds = [z for z in scan2["zones"] if z["metric_id"] in ("inflammation", "redness", "rosacea_like")]
+    if reds:
+        for z in reds:
+            assert z["x"] >= 24.0, f"краснота на левом краю лица: x={z['x']}"
+            assert z["x"] <= 76.0, f"краснота на правом краю лица: x={z['x']}"
+results.append(run("щечные маркеры — внутри лица, не на силуэте", t_cheek_inward))
 
 print()
 print(f"{sum(results)}/{len(results)} проверок пройдено")
