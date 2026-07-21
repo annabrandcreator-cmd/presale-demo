@@ -38,6 +38,9 @@ ALLOWED_ORIGINS = {
             [
                 "https://annakurbatova.ru",
                 "https://www.annakurbatova.ru",
+                "https://ascendbrand.ru",
+                "https://www.ascendbrand.ru",
+                "https://space.ascendbrand.ru",
                 "http://localhost:8080",
                 "http://127.0.0.1:8080",
                 "http://localhost:8765",
