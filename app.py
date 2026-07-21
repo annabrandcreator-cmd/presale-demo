@@ -37,6 +37,7 @@ ALLOWED_ORIGINS = {
         ",".join(
             [
                 "https://annakurbatova.ru",
+                "https://www.annakurbatova.ru",
                 "http://localhost:8080",
                 "http://127.0.0.1:8080",
                 "http://localhost:8765",

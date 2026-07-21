@@ -161,6 +161,51 @@ def health():
     })
 
 
+@cosmetic_bp.route("/api/analyze-photo", methods=["POST", "OPTIONS"])
+def api_analyze_photo_standalone():
+    """
+    Анализ фото без сессии — для статичных brand-демо (SMORODINA и др.),
+    залитых на обычный хостинг. Фото в память, на диск не пишется.
+    """
+    if request.method == "OPTIONS":
+        return "", 204
+
+    image_bytes = None
+    filename = "photo.jpg"
+
+    if request.content_type and "multipart/form-data" in request.content_type:
+        f = request.files.get("photo") or request.files.get("file")
+        if not f:
+            return jsonify({"ok": False, "error": "Нет файла photo"}), 400
+        image_bytes = f.read()
+        filename = f.filename or filename
+    else:
+        data = request.get_json(silent=True) or {}
+        b64 = data.get("image_base64") or data.get("photo")
+        if not b64:
+            return jsonify({"ok": False, "error": "Нужен файл photo или image_base64"}), 400
+        if "," in b64:
+            b64 = b64.split(",", 1)[1]
+        try:
+            image_bytes = base64.b64decode(b64)
+        except Exception:
+            return jsonify({"ok": False, "error": "Некорректный base64"}), 400
+        filename = data.get("filename") or filename
+
+    try:
+        scan = engine.analyze_skin_photo(image_bytes, filename)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 422
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": f"Ошибка анализа: {e}"}), 500
+
+    # Privacy: never return/store raw image payloads
+    scan = {k: v for k, v in scan.items() if k != "preview"}
+    scan["engine"] = "cosmetic_vision"
+    return jsonify(scan)
+
+
 @cosmetic_bp.route("/api/catalog")
 def api_catalog():
     return jsonify({
