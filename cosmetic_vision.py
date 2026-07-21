@@ -762,7 +762,7 @@ def _detect_diffuse_redness(grid, bbox, regions, base):
         redness_index = rg_ratio - 0.6 * max(0.0, gb_ratio - 1.15)
         idx[rid] = (redness_index, pts)
 
-    threshold = 1.40
+    threshold = 1.30
     reds = {rid: v for rid, v in idx.items() if v[0] > threshold}
     symmetric = "left_cheek" in reds and "right_cheek" in reds
     cheek_mean = (
@@ -780,12 +780,12 @@ def _detect_diffuse_redness(grid, bbox, regions, base):
         cx, cy, bx0, by0, bx1, by1 = geom
         fx, fy = _face_frac(cx, cy, bbox)
         # для щёк дополнительно отсекаем наружный силуэт
-        if "cheek" in rid and (fx < 0.20 or fx > 0.80 or fy > 0.74):
+        if "cheek" in rid and (fx < 0.18 or fx > 0.82 or fy > 0.78):
             continue
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
-        strength = min(1.0, (index - threshold) / 0.18)
-        conf = min(0.93, 0.5 + (index - threshold) * 1.6 + (0.12 if symmetric else 0.0))
-        rosacea = symmetric and cheek_mean > 1.43 and rid != "nose"
+        strength = min(1.0, (index - threshold) / 0.20)
+        conf = min(0.93, 0.5 + (index - threshold) * 1.8 + (0.12 if symmetric else 0.0))
+        rosacea = symmetric and cheek_mean > 1.32 and rid != "nose"
         findings.append({
             "type": "rosacea_like" if rosacea else "redness",
             "region": rid, "region_label": rlabel,
@@ -1009,8 +1009,13 @@ def _detect_dark_circles(grid, bbox, regions, base):
 
 
 def _detect_pigmentation(grid, bbox, regions, base):
+    """
+    Коричневатые/более тёмные компактные пятна (веснушки, постакне, солнечные).
+    Пороги мягче прежних: явные пятна на лбу раньше отсекались узкой зоной
+    и conf>=0.78.
+    """
     findings = []
-    # только щёки и центральный лоб — подбородок и край лба дают ложные пятна
+    # лоб + щёки; подбородок даёт ложные пятна от тени
     zone_ids = ("left_cheek", "right_cheek", "forehead")
     allowed = set()
     for rid in zone_ids:
@@ -1020,29 +1025,35 @@ def _detect_pigmentation(grid, bbox, regions, base):
     for x, y in allowed:
         i = y * grid.w + x
         p = grid.px[i]
-        brownish = p[0] > p[1] >= p[2] - 4 and (p[0] - p[2]) > 18
+        # коричневый / тёплый подтон: R≥G, заметный отрыв от синего
+        brownish = (
+            p[0] >= p[1] - 6
+            and p[1] >= p[2] - 10
+            and (p[0] - p[2]) > 12
+        )
         deficit_px = base["luma"] - grid.luma[i]
-        # заметнее порог: слабые тени не считаем пигментом
-        if 28 < deficit_px < 52 and brownish and grid.rg[i] - base["rg"] < 10:
+        # тёплые пигментные пятна чуть краснее базы — допускаем небольшой rg-offset
+        if 16 < deficit_px < 70 and brownish and grid.rg[i] - base["rg"] < 22:
             anomaly.add((x, y))
     face_area = max(1, len(skin_all))
-    for pts in _components(anomaly, grid, min_area=6):
+    for pts in _components(anomaly, grid, min_area=4):
         area_frac = len(pts) / face_area
-        if area_frac > 0.012 or area_frac < 0.0004:
+        # кластеры веснушек на лбу могут быть крупнее одиночного пятна
+        if area_frac > 0.035 or area_frac < 0.00025:
             continue
         _, _, bx0, by0, bx1, by1 = _comp_geometry(pts)
         bw, bh = bx1 - bx0 + 1, by1 - by0 + 1
-        if bw * bh > len(pts) * 2.6:
+        if bw * bh > len(pts) * 3.4:
             continue
-        # почти круглое компактное пятно, не полоса
-        if max(bw, bh) > min(bw, bh) * 2.4:
+        # почти компактное пятно, не длинная тень-полоса
+        if max(bw, bh) > min(bw, bh) * 3.0:
             continue
-        if _skin_ring_fraction(pts, skin_all) < 0.88:
+        if _skin_ring_fraction(pts, skin_all) < 0.78:
             continue
         geom = _pick_interior_centroid(
             pts, bbox, skin_all,
             score_fn=lambda p: base["luma"] - grid.luma[p[1] * grid.w + p[0]],
-            min_local=0.85,
+            min_local=0.72,
         )
         if not geom:
             continue
@@ -1051,21 +1062,21 @@ def _detect_pigmentation(grid, bbox, regions, base):
         rid, rlabel = _region_of(fx, fy)
         if rid not in zone_ids:
             continue
-        # лоб: только середина, ниже линии роста волос
-        if rid == "forehead" and (fy < 0.18 or fy > 0.30 or fx < 0.32 or fx > 0.68):
+        # лоб: шире центра — боковые и верхние пятна тоже видимы
+        if rid == "forehead" and (fy < 0.12 or fy > 0.36 or fx < 0.22 or fx > 0.78):
             continue
-        # щеки: только середина «яблока», не низ и не край
-        if "cheek" in rid and (fx < 0.28 or fx > 0.72 or fy < 0.52 or fy > 0.66):
+        # щеки: середина «яблока», не низ и не край
+        if "cheek" in rid and (fx < 0.24 or fx > 0.76 or fy < 0.48 or fy > 0.70):
             continue
         # не путать тень носогубной складки с пигментом
         if 0.58 <= fy <= 0.74 and abs(fx - 0.5) < 0.18:
             continue
         deficit = sum(base["luma"] - grid.luma[y * grid.w + x] for x, y in pts) / len(pts)
-        if deficit < 34:
+        if deficit < 20:
             continue
-        strength = min(1.0, (deficit - 28) / 28.0)
-        conf = min(0.88, 0.58 + (deficit - 28) / 55.0 + min(0.08, area_frac * 20))
-        if conf < 0.78:
+        strength = min(1.0, (deficit - 16) / 32.0 + min(0.25, area_frac * 12))
+        conf = min(0.92, 0.52 + (deficit - 16) / 48.0 + min(0.12, area_frac * 18))
+        if conf < CONF_FLOOR:
             continue
         findings.append({
             "type": "pigmentation", "region": rid, "region_label": rlabel,
@@ -1074,8 +1085,7 @@ def _detect_pigmentation(grid, bbox, regions, base):
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
     findings.sort(key=lambda f: f["confidence"], reverse=True)
-    # только уверенные пятна — иначе маркер ставится «в никуда»
-    return [f for f in findings if f["confidence"] >= 0.78][:2]
+    return findings[:4]
 
 
 def _detect_texture(grid, bbox, regions, base):
