@@ -145,6 +145,24 @@ def t_blur_moderate():
         assert "размыт" in str(e) or "фильтр" in str(e) or "фокус" in str(e), str(e)
 results.append(run("умеренно размытое фото — запрашиваем новое", t_blur_moderate))
 
+# 6b2. Очки на лице → просим снять и переснять
+def t_glasses():
+    img = base_face()
+    d = ImageDraw.Draw(img)
+    # оправы + блики на линзах (как на реальном селфи в очках)
+    for box in ((195, 295, 315, 385), (325, 295, 445, 385)):
+        d.ellipse(box, outline=(30, 28, 26), width=12)
+    d.rectangle([300, 330, 340, 352], fill=(25, 22, 20))
+    d.ellipse([240, 320, 275, 355], fill=(255, 255, 255))
+    d.ellipse([370, 320, 405, 355], fill=(255, 255, 255))
+    try:
+        cosmetic_engine.analyze_skin_photo(to_bytes(img))
+        raise AssertionError("фото в очках не отклонено")
+    except ValueError as e:
+        msg = str(e).lower()
+        assert "очк" in msg, str(e)
+results.append(run("фото в очках — просим снять и переснять", t_glasses))
+
 # 6c. Лицо обрезано краем кадра → просим другое
 def t_face_cropped():
     img = base_face()

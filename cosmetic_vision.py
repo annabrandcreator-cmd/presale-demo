@@ -288,6 +288,146 @@ def _face_bbox(grid):
 
 # ── Качество фото ────────────────────────────────────────────────────────────
 
+_GLASSES_MSG = (
+    "На фото видны очки — они закрывают зоны кожи и дают блики. "
+    "Снимите очки и сделайте новое селфи анфас при дневном свете."
+)
+
+
+def _zone_stats(grid, bbox, fx0, fy0, fx1, fy1):
+    """Средняя яркость, доля бликов и средняя резкость в доле рамки лица."""
+    x0, y0, x1, y1 = bbox
+    fw, fh = max(1, x1 - x0), max(1, y1 - y0)
+    xa, xb = x0 + int(fx0 * fw), x0 + int(fx1 * fw)
+    ya, yb = y0 + int(fy0 * fh), y0 + int(fy1 * fh)
+    xa, xb = max(x0, xa), min(x1, xb)
+    ya, yb = max(y0, ya), min(y1, yb)
+    if xb <= xa or yb <= ya:
+        return 0.0, 0.0, 0.0, 0
+    lumas, sharp, specular, n = 0.0, 0.0, 0, 0
+    for y in range(ya, yb + 1):
+        row = y * grid.w
+        for x in range(xa, xb + 1):
+            i = row + x
+            # в зоне глаз кожа часто не проходит skin-маску (зрачки/оправа) —
+            # считаем все пиксели, иначе очки «выпадают» из статистики
+            l = grid.luma[i]
+            lumas += l
+            sharp += grid.lap(x, y)
+            # блик на линзе: почти белый и ярче соседей
+            if l >= 236:
+                specular += 1
+            n += 1
+    if n < 20:
+        return 0.0, 0.0, 0.0, n
+    return lumas / n, sharp / n, specular / n, n
+
+
+def _glasses_bridge_score(grid, bbox):
+    """
+    Тёмная перемычка оправы между глазами (переносица).
+    Сравниваем горизонтальную полосу над переносицей с соседней кожей.
+    """
+    x0, y0, x1, y1 = bbox
+    fw, fh = max(1, x1 - x0), max(1, y1 - y0)
+    # переносица / bridge: центр лица, чуть ниже бровей
+    bx0 = x0 + int(0.42 * fw)
+    bx1 = x0 + int(0.58 * fw)
+    by0 = y0 + int(0.40 * fh)
+    by1 = y0 + int(0.50 * fh)
+    bridge = []
+    cheeks = []
+    for y in range(by0, by1 + 1):
+        row = y * grid.w
+        for x in range(bx0, bx1 + 1):
+            bridge.append(grid.luma[row + x])
+        for x in list(range(x0 + int(0.18 * fw), x0 + int(0.28 * fw))) + list(
+            range(x0 + int(0.72 * fw), x0 + int(0.82 * fw))
+        ):
+            if x0 <= x <= x1:
+                cheeks.append(grid.luma[row + x])
+    if len(bridge) < 12 or len(cheeks) < 12:
+        return 0.0
+    bridge.sort()
+    cheeks.sort()
+    # берём тёмную четверть — оправа, не блик
+    b_dark = sum(bridge[: max(1, len(bridge) // 4)]) / max(1, len(bridge) // 4)
+    c_med = cheeks[len(cheeks) // 2]
+    return max(0.0, c_med - b_dark)
+
+
+def _glasses_frame_arcs(grid, bbox):
+    """
+    Тёмные дуги оправы вокруг глаз: много тёмных пикселей по контуру
+    глазных прямоугольников при светлой середине (линза / блик).
+    """
+    x0, y0, x1, y1 = bbox
+    fw, fh = max(1, x1 - x0), max(1, y1 - y0)
+    eyes = (
+        (0.18, 0.36, 0.44, 0.54),
+        (0.56, 0.36, 0.82, 0.54),
+    )
+    hits = 0
+    for fx0, fy0, fx1, fy1 in eyes:
+        xa, xb = x0 + int(fx0 * fw), x0 + int(fx1 * fw)
+        ya, yb = y0 + int(fy0 * fh), y0 + int(fy1 * fh)
+        w, h = max(1, xb - xa), max(1, yb - ya)
+        border_dark = border_n = core_bright = core_n = 0
+        for y in range(ya, yb + 1):
+            row = y * grid.w
+            ty = (y - ya) / h
+            for x in range(xa, xb + 1):
+                tx = (x - xa) / w
+                on_border = tx < 0.14 or tx > 0.86 or ty < 0.18 or ty > 0.82
+                l = grid.luma[row + x]
+                if on_border:
+                    border_n += 1
+                    if l < 95:
+                        border_dark += 1
+                elif 0.28 < tx < 0.72 and 0.28 < ty < 0.72:
+                    core_n += 1
+                    if l > 200:
+                        core_bright += 1
+        if border_n < 20 or core_n < 10:
+            continue
+        if border_dark / border_n > 0.22 and core_bright / core_n > 0.08:
+            hits += 1
+    return hits
+
+
+def _glasses_likely(grid, bbox, source_img=None, face_frac=None):
+    """
+    Эвристика «на лице очки»: блики на линзах + тёмная оправа/перемычка.
+    Без блика или без оправы не отклоняем — иначе обычные глаза/брови
+    дают ложные срабатывания на синтетических и реальных селфи.
+    """
+    eye_luma, eye_sharp, eye_spec, eye_n = _zone_stats(grid, bbox, 0.14, 0.34, 0.86, 0.56)
+    cheek_luma, cheek_sharp, cheek_spec, cheek_n = _zone_stats(
+        grid, bbox, 0.18, 0.56, 0.82, 0.74
+    )
+    if eye_n < 40 or cheek_n < 40:
+        return False
+
+    glare = eye_spec >= 0.006 and eye_spec > cheek_spec * 2.5 + 0.002
+    strong_glare = eye_spec >= 0.012 and eye_spec > cheek_spec * 2.0 + 0.003
+    bridge = _glasses_bridge_score(grid, bbox)
+    arcs = _glasses_frame_arcs(grid, bbox)
+    rim = arcs >= 2 or (arcs >= 1 and bridge >= 20)
+    strong_rim = arcs >= 2 and bridge >= 16
+
+    # Главное правило: блик на линзах + признаки оправы
+    if (glare or strong_glare) and (rim or strong_rim or bridge >= 22):
+        return True
+    # Сильная оправа с двумя дугами и перемычкой даже при слабом блике
+    if strong_rim and bridge >= 24 and eye_sharp > cheek_sharp * 1.3:
+        return True
+    return False
+
+
+def _assert_no_glasses(grid, bbox, source_img=None, face_frac=None):
+    if _glasses_likely(grid, bbox, source_img=source_img, face_frac=face_frac):
+        raise PhotoQualityError(_GLASSES_MSG)
+
 
 def _check_quality(grid, bbox, source_img=None, face_frac=None):
     x0, y0, x1, y1 = bbox
@@ -1377,6 +1517,7 @@ def analyze(image_bytes):
 
     _validate_face_framing(face_frac, grid, bbox)
     quality = _check_quality(grid, bbox, source_img=img, face_frac=face_frac)
+    _assert_no_glasses(grid, bbox, source_img=img, face_frac=face_frac)
     regions, face_pixels = _collect_region_pixels(grid, bbox)
     base = _baseline(grid, face_pixels)
 
