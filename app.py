@@ -54,19 +54,27 @@ ALLOWED_ORIGINS = {
 }
 
 
+def _cors_origin_allowed(origin: str) -> bool:
+    if not origin:
+        return False
+    if origin in ALLOWED_ORIGINS:
+        return True
+    if origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:"):
+        return True
+    # Ascend Brand Space / client cabinets (even if ALLOWED_ORIGINS env is outdated)
+    if origin in ("https://ascendbrand.ru", "https://www.ascendbrand.ru"):
+        return True
+    if origin.startswith("https://") and origin.endswith(".ascendbrand.ru"):
+        return True
+    if origin in ("https://annakurbatova.ru", "https://www.annakurbatova.ru"):
+        return True
+    return False
+
+
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin")
-    allow = False
-    if origin and origin in ALLOWED_ORIGINS:
-        allow = True
-    elif origin and (
-        origin.startswith("http://localhost:")
-        or origin.startswith("http://127.0.0.1:")
-    ):
-        # Local static previews (any port) for redesign iteration
-        allow = True
-    if allow and origin:
+    if _cors_origin_allowed(origin) and origin:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
