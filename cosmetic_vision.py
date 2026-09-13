@@ -50,16 +50,20 @@ _EXCLUDE = [
 ]
 
 FEATURE_LABELS = {
-    "inflammation": "Воспаления",
-    "redness": "Покраснения",
-    "rosacea_like": "Сосудистая краснота",
+    "inflammation": "Отдельные воспаления",
+    "redness": "Покраснение",
+    "rosacea_like": "Покраснение",  # только визуальный признак, не диагноз
     "pigmentation": "Пигментация",
     "dark_circles": "Тёмные круги",
-    "pores": "Расширенные поры",
-    "shine": "Жирный блеск",
-    "wrinkles": "Морщинки",
+    "pores": "Заметные поры",
+    "shine": "Блеск в Т-зоне",
+    "wrinkles": "Мелкие линии",
     "nasolabial": "Носогубные складки",
-    "dryness": "Сухость",
+    "dryness": "Признаки сухости",
+    "dullness": "Тусклость тона",
+    "uneven_texture": "Неровность текстуры",
+    "puffiness": "Отёчность вокруг глаз",
+    "tired_eyes": "Признаки усталости взгляда",
 }
 
 SEVERITY_LABELS = {"mild": "слабая", "moderate": "умеренная", "high": "выраженная"}
@@ -714,29 +718,35 @@ def _local_skin_frac(x, y, skin_all, radius=2):
     return sum(1 for p in neigh if p in skin_all) / len(neigh)
 
 
-def _pick_interior_centroid(pts, bbox, skin_all, score_fn=None, min_local=0.78):
+def _pick_interior_centroid(pts, bbox, skin_all, score_fn=None, min_local=0.78, y_bias="cheek"):
     """
     Центроид маркера только по внутренним пикселям аномалии.
     Отсекает край силуэта/фон; для щёк смещает точку к центру лица.
+    y_bias="cheek" — тянет к «яблоку» щеки; "none" — остаётся на самом тёмном ядре
+    (нужно для пигментации, иначе маркер с линии роста волос уезжает на чистый лоб).
     Возвращает (cx, cy, bx0, by0, bx1, by1) или None.
     """
     if not pts:
         return None
     scored = []
+    min_fy = 0.12 if y_bias == "none" else 0.14
     for x, y in pts:
         if _local_skin_frac(x, y, skin_all) < min_local:
             continue
         fx, fy = _face_frac(x, y, bbox)
         # край bbox / волосы / фон — не ставим маркер
-        if fx < 0.18 or fx > 0.82 or fy < 0.14 or fy > 0.90:
+        if fx < 0.18 or fx > 0.82 or fy < min_fy or fy > 0.90:
             continue
         base = score_fn((x, y)) if score_fn else 1.0
         # inward: дальше от наружного контура щёк
         inward = 1.0 - max(0.0, 0.22 - fx) * 4.0 - max(0.0, fx - 0.78) * 4.0
         inward *= 1.0 - abs(fx - 0.50) * 0.55
-        # mid-cheek: не уезжать к челюсти
-        mid_y = 1.0 - max(0.0, fy - 0.72) * 2.8
-        mid_y *= 1.0 - max(0.0, 0.48 - fy) * 1.5
+        if y_bias == "cheek":
+            # mid-cheek: не уезжать к челюсти / вверх на лоб
+            mid_y = 1.0 - max(0.0, fy - 0.72) * 2.8
+            mid_y *= 1.0 - max(0.0, 0.48 - fy) * 1.5
+        else:
+            mid_y = 1.0
         scored.append((base * max(0.12, inward) * max(0.18, mid_y), x, y))
     if len(scored) < 3:
         # запасной проход: чуть мягче по локальной коже, но силуэт всё равно режем
@@ -745,7 +755,7 @@ def _pick_interior_centroid(pts, bbox, skin_all, score_fn=None, min_local=0.78):
             if _local_skin_frac(x, y, skin_all, radius=1) < 0.65:
                 continue
             fx, fy = _face_frac(x, y, bbox)
-            if fx < 0.20 or fx > 0.80 or fy > 0.88:
+            if fx < 0.20 or fx > 0.80 or fy > 0.88 or fy < min_fy:
                 continue
             base = score_fn((x, y)) if score_fn else 1.0
             scored.append((base * (1.0 - abs(fx - 0.5)), x, y))
@@ -767,7 +777,7 @@ def _pick_interior_centroid(pts, bbox, skin_all, score_fn=None, min_local=0.78):
     elif fx > 0.78:
         cx = x0 + 0.74 * fw
         fx = 0.74
-    if fy > 0.76:
+    if y_bias == "cheek" and fy > 0.76:
         cy = y0 + 0.68 * fh
     # точка должна остаться на коже (после clamp)
     ix, iy = int(round(cx)), int(round(cy))
@@ -777,6 +787,37 @@ def _pick_interior_centroid(pts, bbox, skin_all, score_fn=None, min_local=0.78):
     bx0, by0 = min(xs), min(ys)
     bx1, by1 = max(xs), max(ys)
     return cx, cy, bx0, by0, bx1, by1
+
+
+def _local_ring_deficit(pts, grid, radius=5):
+    """
+    Локальный контраст: средняя яркость кольца вокруг пятна минус яркость пятна.
+    Настоящая пигментация — островок темнее соседей; ровный лоб с тенью от света — нет.
+    """
+    if not pts:
+        return 0.0
+    pset = set(pts)
+    w = grid.w
+    h = grid.h
+    inside = sum(grid.luma[y * w + x] for x, y in pts) / len(pts)
+    ring = []
+    r2 = radius * radius
+    for x, y in pts:
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                if dx * dx + dy * dy > r2 or (dx == 0 and dy == 0):
+                    continue
+                nx, ny = x + dx, y + dy
+                if (nx, ny) in pset:
+                    continue
+                if nx < 0 or ny < 0 or nx >= w or ny >= h:
+                    continue
+                if not grid.skin[ny * w + nx]:
+                    continue
+                ring.append(grid.luma[ny * w + nx])
+    if len(ring) < 10:
+        return 0.0
+    return (sum(ring) / len(ring)) - inside
 
 
 # ── Детекторы признаков ──────────────────────────────────────────────────────
@@ -1151,29 +1192,46 @@ def _detect_dark_circles(grid, bbox, regions, base):
 def _detect_pigmentation(grid, bbox, regions, base):
     """
     Коричневатые/более тёмные компактные пятна (веснушки, постакне, солнечные).
-    Пороги мягче прежних: явные пятна на лбу раньше отсекались узкой зоной
-    и conf>=0.78.
+    Сравниваем с локальной базой зоны и кольцом вокруг пятна — иначе ровный лоб
+    при верхнем свете ошибочно помечается как пигментация.
     """
     findings = []
-    # лоб + щёки; подбородок даёт ложные пятна от тени
+    # щёки — основной поиск; лоб только при явном локальном островке
     zone_ids = ("left_cheek", "right_cheek", "forehead")
-    allowed = set()
+    region_luma = {}
     for rid in zone_ids:
-        allowed.update(regions.get(rid) or [])
+        pts = regions.get(rid) or []
+        if len(pts) >= 24:
+            region_luma[rid] = sum(grid.luma[y * grid.w + x] for x, y in pts) / len(pts)
+    allowed = set()
+    pixel_zone = {}
+    for rid in zone_ids:
+        for p in regions.get(rid) or []:
+            allowed.add(p)
+            pixel_zone[p] = rid
     skin_all = _bbox_skin_set(grid, bbox)
     anomaly = set()
     for x, y in allowed:
         i = y * grid.w + x
         p = grid.px[i]
+        fx, fy = _face_frac(x, y, bbox)
+        rid0 = pixel_zone.get((x, y))
+        # линия роста волос / верх лба — частые ложные «пятна» от тени
+        if rid0 == "forehead" and (fy < 0.16 or fy > 0.34):
+            continue
         # коричневый / тёплый подтон: R≥G, заметный отрыв от синего
         brownish = (
             p[0] >= p[1] - 6
             and p[1] >= p[2] - 10
             and (p[0] - p[2]) > 12
         )
-        deficit_px = base["luma"] - grid.luma[i]
+        local_base = region_luma.get(rid0, base["luma"])
+        deficit_px = local_base - grid.luma[i]
+        # на лбу нужен более сильный отрыв от собственной зоны, не от щёк
+        min_def = 26 if rid0 == "forehead" else 18
+        max_def = 70 if rid0 == "forehead" else 72
         # тёплые пигментные пятна чуть краснее базы — допускаем небольшой rg-offset
-        if 16 < deficit_px < 70 and brownish and grid.rg[i] - base["rg"] < 22:
+        if min_def < deficit_px < max_def and brownish and grid.rg[i] - base["rg"] < 22:
             anomaly.add((x, y))
     face_area = max(1, len(skin_all))
     for pts in _components(anomaly, grid, min_area=4):
@@ -1190,10 +1248,24 @@ def _detect_pigmentation(grid, bbox, regions, base):
             continue
         if _skin_ring_fraction(pts, skin_all) < 0.78:
             continue
+        local_contrast = _local_ring_deficit(pts, grid, radius=5)
+        # без локального островка (темнее соседей) — это освещение, не пигмент
+        rid_guess, _ = _region_of(*_face_frac(
+            sum(p[0] for p in pts) / len(pts),
+            sum(p[1] for p in pts) / len(pts),
+            bbox,
+        ))
+        min_local = 20.0 if rid_guess == "forehead" else 12.0
+        if local_contrast < min_local:
+            continue
         geom = _pick_interior_centroid(
             pts, bbox, skin_all,
-            score_fn=lambda p: base["luma"] - grid.luma[p[1] * grid.w + p[0]],
+            score_fn=lambda p: (
+                region_luma.get(pixel_zone.get(p), base["luma"])
+                - grid.luma[p[1] * grid.w + p[0]]
+            ),
             min_local=0.72,
+            y_bias="none",
         )
         if not geom:
             continue
@@ -1202,8 +1274,8 @@ def _detect_pigmentation(grid, bbox, regions, base):
         rid, rlabel = _region_of(fx, fy)
         if rid not in zone_ids:
             continue
-        # лоб: шире центра — боковые и верхние пятна тоже видимы
-        if rid == "forehead" and (fy < 0.12 or fy > 0.36 or fx < 0.22 or fx > 0.78):
+        # лоб: только середина зоны, без линии волос
+        if rid == "forehead" and (fy < 0.16 or fy > 0.34 or fx < 0.28 or fx > 0.72):
             continue
         # щеки: середина «яблока», не низ и не край
         if "cheek" in rid and (fx < 0.24 or fx > 0.76 or fy < 0.48 or fy > 0.70):
@@ -1211,12 +1283,21 @@ def _detect_pigmentation(grid, bbox, regions, base):
         # не путать тень носогубной складки с пигментом
         if 0.58 <= fy <= 0.74 and abs(fx - 0.5) < 0.18:
             continue
-        deficit = sum(base["luma"] - grid.luma[y * grid.w + x] for x, y in pts) / len(pts)
+        local_base = region_luma.get(rid, base["luma"])
+        deficit = sum(local_base - grid.luma[y * grid.w + x] for x, y in pts) / len(pts)
+        if rid == "forehead" and (deficit < 28 or local_contrast < 22):
+            continue
         if deficit < 20:
             continue
         strength = min(1.0, (deficit - 16) / 32.0 + min(0.25, area_frac * 12))
         conf = min(0.92, 0.52 + (deficit - 16) / 48.0 + min(0.12, area_frac * 18))
+        # локальный контраст повышает уверенность; ровный градиент — понижает
+        conf = min(0.92, conf + min(0.10, (local_contrast - 12) / 80.0))
+        if rid == "forehead":
+            conf *= 0.88  # лоб чаще ловит свет/волосы — требуем сильнее
         if conf < CONF_FLOOR:
+            continue
+        if rid == "forehead" and conf < CONF_FLOOR + 0.08:
             continue
         findings.append({
             "type": "pigmentation", "region": rid, "region_label": rlabel,
@@ -1225,6 +1306,14 @@ def _detect_pigmentation(grid, bbox, regions, base):
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
     findings.sort(key=lambda f: f["confidence"], reverse=True)
+    # если есть пигмент на щеках — слабые «пятна» на лбу отбрасываем
+    cheeks = [f for f in findings if "cheek" in f["region"]]
+    if cheeks:
+        best_cheek = max(f["confidence"] for f in cheeks)
+        findings = [
+            f for f in findings
+            if f["region"] != "forehead" or f["confidence"] >= best_cheek + 0.06
+        ]
     return findings[:4]
 
 
@@ -1266,19 +1355,30 @@ def _detect_texture(grid, bbox, regions, base):
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
         strength = min(1.0, (ratio - 1.3) / 1.2 + (tex - 7.5) / 25.0)
         conf = min(0.93, 0.5 + (ratio - 1.3) * 0.4 + tex / 80.0)
+        ftype = "pores" if rid in ("nose", "forehead", "chin") or ratio >= 1.55 else "uneven_texture"
+        evidence = (
+            "неоднородная текстура и заметные устья пор относительно остальной кожи"
+            if ftype == "pores"
+            else "визуально неровная текстура кожи относительно соседних участков"
+        )
         findings.append({
-            "type": "pores", "region": rid, "region_label": rlabel,
+            "type": ftype, "region": rid, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
-            "evidence": "неоднородная текстура и заметные устья пор относительно остальной кожи",
+            "evidence": evidence,
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
     findings.sort(key=lambda f: f["confidence"], reverse=True)
-    return findings[:2]
+    return findings[:3]
 
 
 def _detect_shine(grid, bbox, regions, base):
-    findings = []
-    for rid in ("forehead", "nose"):
+    """
+    Жирный блеск в Т-зоне (лоб / нос / подбородок).
+    Одиночный маленький блик от света не считаем жирностью —
+    нужен заметный участок или совпадение в нескольких зонах Т.
+    """
+    candidates = []
+    for rid in ("forehead", "nose", "chin"):
         pts = regions.get(rid) or []
         if len(pts) < 30:
             continue
@@ -1289,20 +1389,196 @@ def _detect_shine(grid, bbox, regions, base):
         frac = len(bright) / len(pts)
         if frac < 0.18:
             continue
-        cx = sum(p[0] for p in bright) / len(bright)
-        cy = sum(p[1] for p in bright) / len(bright)
         bx0, by0 = min(p[0] for p in bright), min(p[1] for p in bright)
         bx1, by1 = max(p[0] for p in bright), max(p[1] for p in bright)
+        box_area = max(1, (bx1 - bx0 + 1) * (by1 - by0 + 1))
+        # Крошечный яркий блик при малой доле — скорее блик освещения.
+        if box_area < len(pts) * 0.07 and frac < 0.26:
+            continue
+        cx = sum(p[0] for p in bright) / len(bright)
+        cy = sum(p[1] for p in bright) / len(bright)
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
         strength = min(1.0, (frac - 0.18) * 2.2 + 0.22)
         conf = min(0.9, 0.55 + frac * 0.8)
-        findings.append({
+        candidates.append({
             "type": "shine", "region": rid, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
-            "evidence": "выраженные блики на коже — признак избытка себума",
+            "evidence": "распределённый блеск в зоне Т относительно среднего тона кожи",
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
-    return findings
+    if len(candidates) >= 2:
+        return candidates
+    # Одна зона — только если сигнал сильный (не похож на точечный блик света)
+    return [
+        c for c in candidates
+        if c["strength"] >= 0.48 and c["confidence"] >= 0.70
+    ]
+
+
+def _detect_dryness(grid, bbox, regions, base):
+    """
+    Только явный визуальный сигнал шероховатости / матовой неоднородности.
+    При низкой уверенности не возвращаем — лучше уточнить вопросом.
+    """
+    findings = []
+    skin_all = _bbox_skin_set(grid, bbox)
+    shine_proxy = 0
+    for rid in ("forehead", "nose", "chin"):
+        pts = regions.get(rid) or []
+        if len(pts) < 20:
+            continue
+        bright = sum(1 for x, y in pts if grid.luma[y * grid.w + x] - base["luma"] > 34)
+        shine_proxy = max(shine_proxy, bright / len(pts))
+    if shine_proxy > 0.22:
+        return []  # блеск в Т-зоне — не трактуем как сухость
+
+    for rid in ("left_cheek", "right_cheek", "forehead", "chin"):
+        pts = regions.get(rid) or []
+        if len(pts) < 45:
+            continue
+        if _skin_ring_fraction(pts, skin_all, radius=3) < 0.82:
+            continue
+        laps = [grid.lap(x, y) for x, y in pts]
+        tex = sum(laps) / len(laps)
+        ratio = tex / max(0.5, base["tex"])
+        # сухость: повышенный микроконтраст при относительно матовой зоне
+        matte = sum(1 for x, y in pts if abs(grid.luma[y * grid.w + x] - base["luma"]) < 18) / len(pts)
+        if tex < 9.0 or ratio < 1.35 or matte < 0.55:
+            continue
+        geom = _pick_interior_centroid(
+            pts, bbox, skin_all,
+            score_fn=lambda p: grid.lap(p[0], p[1]),
+        )
+        if not geom:
+            continue
+        cx, cy, bx0, by0, bx1, by1 = geom
+        rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
+        strength = min(1.0, (ratio - 1.35) / 1.1 + (tex - 9.0) / 28.0)
+        conf = min(0.86, 0.48 + (ratio - 1.35) * 0.35 + matte * 0.15)
+        if conf < CONF_FLOOR + 0.04:
+            continue
+        findings.append({
+            "type": "dryness", "region": rid, "region_label": rlabel,
+            "strength": strength, "confidence": round(conf, 2),
+            "evidence": "матовая неоднородная текстура — возможный визуальный признак сухости",
+            "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+        })
+    findings.sort(key=lambda f: f["confidence"], reverse=True)
+    return findings[:1]
+
+
+def _detect_puffiness(grid, bbox, regions, base):
+    """Отёчность под глазами: зона светлее/ровнее соседней щеки, без тёмных кругов."""
+    findings = []
+    pairs = (
+        ("left_under_eye", "left_cheek"),
+        ("right_under_eye", "right_cheek"),
+    )
+    for under_id, cheek_id in pairs:
+        under = regions.get(under_id) or []
+        cheek = regions.get(cheek_id) or []
+        if len(under) < 14 or len(cheek) < 30:
+            continue
+        under = [p for p in under if _face_frac(p[0], p[1], bbox)[1] <= 0.57] or under
+        if len(under) < 10:
+            continue
+        u_luma = sum(grid.luma[y * grid.w + x] for x, y in under) / len(under)
+        c_luma = sum(grid.luma[y * grid.w + x] for x, y in cheek) / len(cheek)
+        u_tex = sum(grid.lap(x, y) for x, y in under) / len(under)
+        c_tex = sum(grid.lap(x, y) for x, y in cheek) / len(cheek)
+        # отёк: под глазом светлее щеки и чуть ровнее по текстуре
+        if u_luma < c_luma + 6:
+            continue
+        if u_tex > c_tex * 1.15:
+            continue
+        dark_frac = sum(
+            1 for x, y in under if base["luma"] - grid.luma[y * grid.w + x] > 18
+        ) / len(under)
+        if dark_frac > 0.28:
+            continue  # это скорее тёмные круги
+        cx = sum(p[0] for p in under) / len(under)
+        cy = sum(p[1] for p in under) / len(under)
+        bx0, by0 = min(p[0] for p in under), min(p[1] for p in under)
+        bx1, by1 = max(p[0] for p in under), max(p[1] for p in under)
+        rlabel = dict((r[0], r[1]) for r in _REGIONS)[under_id]
+        strength = min(1.0, (u_luma - c_luma) / 22.0 + 0.25)
+        conf = min(0.84, 0.50 + (u_luma - c_luma) / 40.0)
+        if conf < CONF_FLOOR:
+            continue
+        findings.append({
+            "type": "puffiness", "region": under_id, "region_label": rlabel,
+            "strength": strength, "confidence": round(conf, 2),
+            "evidence": "область под глазом выглядит более объёмной и светлой относительно щеки",
+            "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+        })
+    return findings[:2]
+
+
+def _detect_dullness(grid, bbox, regions, base, metrics_radiance_hint=None):
+    """Тусклость: низкая «живость» тона без явной локальной пигментации."""
+    skin_all = _bbox_skin_set(grid, bbox)
+    face_pts = [p for rid in ("forehead", "left_cheek", "right_cheek", "nose", "chin")
+                for p in (regions.get(rid) or [])]
+    if len(face_pts) < 80:
+        return []
+    # контраст тона по лицу
+    lumas = [grid.luma[y * grid.w + x] for x, y in face_pts]
+    mean_l = sum(lumas) / len(lumas)
+    var = sum((l - mean_l) ** 2 for l in lumas) / len(lumas)
+    # тусклость: относительно ровный, «плоский» тон + ниже среднего luma
+    flat = var < 180
+    dim = mean_l < base["luma"] * 0.97 and mean_l < 138
+    if not (flat and dim):
+        return []
+    # якорь — центр лба или щёк
+    for rid in ("forehead", "left_cheek", "right_cheek"):
+        pts = regions.get(rid) or []
+        if len(pts) < 40:
+            continue
+        if _skin_ring_fraction(pts, skin_all, radius=2) < 0.8:
+            continue
+        geom = _pick_interior_centroid(pts, bbox, skin_all)
+        if not geom:
+            continue
+        cx, cy, bx0, by0, bx1, by1 = geom
+        rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
+        conf = 0.64 if flat and dim else 0.58
+        if conf < CONF_FLOOR:
+            return []
+        return [{
+            "type": "dullness", "region": rid, "region_label": rlabel,
+            "strength": 0.45,
+            "confidence": round(conf, 2),
+            "evidence": "тон кожи выглядит тусклым и менее живым относительно ожидаемой яркости",
+            "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+        }]
+    return []
+
+
+def _detect_tired_eyes(findings):
+    """Признаки усталости взгляда: тёмные круги и/или мелкие линии под глазами."""
+    under_wrinkles = [
+        f for f in findings
+        if f["type"] == "wrinkles" and "under_eye" in f.get("region", "")
+    ]
+    dark = [f for f in findings if f["type"] == "dark_circles"]
+    puff = [f for f in findings if f["type"] == "puffiness"]
+    if not (dark or under_wrinkles or puff):
+        return []
+    if not ((dark and under_wrinkles) or (dark and puff) or (len(dark) >= 2 and dark[0]["strength"] >= 0.45)):
+        # достаточно сильных тёмных кругов в паре
+        if not (len(dark) >= 2 and max(f["strength"] for f in dark) >= 0.55):
+            return []
+    src = dark[0] if dark else (under_wrinkles[0] if under_wrinkles else puff[0])
+    return [{
+        "type": "tired_eyes",
+        "region": src["region"],
+        "region_label": src["region_label"],
+        "strength": min(1.0, src["strength"] * 0.9 + 0.1),
+        "confidence": round(min(0.88, src["confidence"] * 0.95), 2),
+        "evidence": "видимые признаки усталости в зоне глаз",
+        "geom": src["geom"],
+    }]
 
 
 def _detect_wrinkles(grid, bbox, regions, base):
@@ -1528,8 +1804,11 @@ def analyze(image_bytes):
     raw += _detect_pigmentation(grid, bbox, regions, base)
     raw += _detect_texture(grid, bbox, regions, base)
     raw += _detect_shine(grid, bbox, regions, base)
+    raw += _detect_dryness(grid, bbox, regions, base)
+    raw += _detect_puffiness(grid, bbox, regions, base)
     raw += _detect_wrinkles(grid, bbox, regions, base)
     raw += _detect_nasolabial(grid, bbox, regions, base)
+    raw += _detect_dullness(grid, bbox, regions, base)
 
     merged = _merge_findings(raw)
     # Сосудистая краснота уже описывает щёки — не дублируем её ещё и
@@ -1539,6 +1818,8 @@ def analyze(image_bytes):
             f for f in merged
             if not (f["type"] == "redness" and "cheek" in f["region"])
         ]
+    # усталость взгляда — вторичный визуальный вывод из уже найденных зон глаз
+    merged += _detect_tired_eyes(merged)
     findings = [f for f in merged if f["confidence"] >= CONF_FLOOR]
     findings.sort(key=lambda f: (f["confidence"] + f["strength"]), reverse=True)
     findings = findings[:MAX_FINDINGS]

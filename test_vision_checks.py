@@ -227,6 +227,30 @@ def t_under_eye():
                 f"тень под глазом определена как пигментация на щеке: {z}"
 results.append(run("тени под глазами ≠ пигментация щёк", t_under_eye))
 
+# 8b. Ровный лоб с верхним затемнением ≠ пигментация на чистом лбу;
+#     реальное пятно на щеке должно попасть в щёку, не уехать на лоб.
+def t_forehead_not_false_pigment():
+    img = base_face()
+    d = ImageDraw.Draw(img)
+    # мягкий градиент «верхний свет» — лоб чуть темнее, без пятен
+    px = img.load()
+    for y in range(120, 280):
+        for x in range(200, 440):
+            r, g, b = px[x, y]
+            shade = int((280 - y) * 0.18)
+            px[x, y] = (max(0, r - shade), max(0, g - shade), max(0, b - shade))
+    # явное пигментное пятно на щеке
+    d.ellipse([255, 475, 295, 515], fill=(148, 108, 88))
+    scan = cosmetic_engine.analyze_skin_photo(to_bytes(img))
+    pig = [z for z in scan["zones"] if z["metric_id"] == "pigmentation"]
+    for z in pig:
+        assert z.get("region") != "forehead", \
+            f"ровный лоб помечен как пигментация: {z}"
+    if pig:
+        assert any("cheek" in (z.get("region") or "") for z in pig), \
+            f"пятно на щеке не найдено как пигментация щёк: {pig}"
+results.append(run("ровный лоб ≠ пигментация; пятно остаётся на щеке", t_forehead_not_false_pigment))
+
 # 9. Строгая синхронизация тегов и блока особенностей
 def t_sync():
     img = base_face()
