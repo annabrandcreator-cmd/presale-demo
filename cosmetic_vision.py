@@ -57,7 +57,7 @@ FEATURE_LABELS = {
     "dark_circles": "Тёмные круги",
     "pores": "Заметные поры",
     "shine": "Блеск в Т-зоне",
-    "wrinkles": "Мелкие линии",
+    "wrinkles": "Мелкие морщины",
     "nasolabial": "Носогубные складки",
     "dryness": "Признаки сухости",
     "dullness": "Тусклость тона",
@@ -1556,7 +1556,7 @@ def _detect_dullness(grid, bbox, regions, base, metrics_radiance_hint=None):
 
 
 def _detect_tired_eyes(findings):
-    """Признаки усталости взгляда: тёмные круги и/или мелкие линии под глазами."""
+    """Признаки усталости взгляда: тёмные круги и/или мелкие морщины под глазами."""
     under_wrinkles = [
         f for f in findings
         if f["type"] == "wrinkles" and "under_eye" in f.get("region", "")
@@ -1613,13 +1613,13 @@ def _detect_wrinkles(grid, bbox, regions, base):
         if direction == "horizontal":
             main, cross = gy_m, gx_m
             evidence = (
-                "мелкие горизонтальные линии под глазом"
+                "мелкие горизонтальные морщины под глазом"
                 if "under_eye" in rid
-                else "повторяющиеся горизонтальные линии на лбу"
+                else "повторяющиеся горизонтальные морщины на лбу"
             )
         else:
             main, cross = gx_m, gy_m
-            evidence = "вертикальные линии в межбровной зоне"
+            evidence = "вертикальные морщины в межбровной зоне"
         ratio_floor = 1.05 if "under_eye" in rid else 1.6
         if "under_eye" in rid:
             under_raw[rid] = (main, cross, pts, floor, ratio_floor, evidence)
@@ -1727,7 +1727,7 @@ def _detect_wrinkles(grid, bbox, regions, base):
                 "type": "wrinkles", "region": other, "region_label": rlabel,
                 "strength": max(0.3, found["strength"] * 0.7),
                 "confidence": round(min(0.78, found["confidence"] * 0.85), 2),
-                "evidence": "мелкие горизонтальные линии под глазом",
+                "evidence": "мелкие горизонтальные морщины под глазом",
                 "geom": _to_pct(grid, cx, cy, int(cx), int(cy), int(cx), int(cy)),
             })
     return findings

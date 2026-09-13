@@ -465,6 +465,10 @@ _FEATURE_CONCERN = {
     "wrinkles": "aging",
     "nasolabial": "lifting",
     "dryness": "dryness",
+    "dullness": "dullness",
+    "uneven_texture": "dryness",
+    "puffiness": "dullness",
+    "tired_eyes": "dullness",
 }
 
 _CONCERN_TIPS = {
@@ -594,7 +598,7 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         {"id": "pores", "label": "Поры", "score": m["pores"], "hint": "видимость"},
         {"id": "redness", "label": "Покраснения", "score": m["redness"], "hint": "реактивность"},
         {"id": "radiance", "label": "Сияние", "score": m["radiance"], "hint": "ровность тона"},
-        {"id": "fine_lines", "label": "Морщинки", "score": m["fine_lines"], "hint": "мелкие линии"},
+        {"id": "fine_lines", "label": "Мелкие морщины", "score": m["fine_lines"], "hint": "мелкие морщины"},
         {"id": "barrier", "label": "Барьер кожи", "score": m["barrier"], "hint": "защита"},
     ]
 
