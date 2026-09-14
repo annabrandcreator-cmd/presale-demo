@@ -330,6 +330,45 @@ def t_bangs_not_pores():
         assert z["y"] >= 28.0, f"маркер пор слишком высоко (похоже на волосы): y={z['y']}% {z}"
 results.append(run("чёлка/волосы на лбу ≠ расширенные поры", t_bangs_not_pores))
 
+# 12. Тёмные круги / морщины / усталость — маркеры ПОД глазами, не на зрачках
+def t_eye_markers_under_not_on_pupils():
+    from cosmetic_vision import _detect_face_haar, _face_frac, _EXCLUDE, _in_rect
+    img = base_face()
+    d = ImageDraw.Draw(img)
+    # выраженные тени сразу под глазами (глаза на synthetic ~y 320–360)
+    d.ellipse([210, 365, 300, 415], fill=(135, 100, 85))
+    d.ellipse([340, 365, 430, 415], fill=(135, 100, 85))
+    # лёгкие горизонтальные «морщинки» в той же полосе
+    for y in (372, 380, 388):
+        d.line([(220, y), (290, y)], fill=(125, 95, 80), width=1)
+        d.line([(350, y), (420, y)], fill=(125, 95, 80), width=1)
+    scan = cosmetic_engine.analyze_skin_photo(to_bytes(img))
+    face = _detect_face_haar(img)
+    assert face, "лицо не найдено"
+    bbox = (
+        int(face[0] * W), int(face[1] * H),
+        int(face[2] * W), int(face[3] * H),
+    )
+    eye_types = ("dark_circles", "tired_eyes", "wrinkles", "puffiness")
+    eye_zones = [
+        z for z in scan["zones"]
+        if z["metric_id"] in eye_types
+        or "under_eye" in (z.get("region") or "")
+    ]
+    assert eye_zones, f"нет глазных зон: {[z['metric_id'] for z in scan['zones']]}"
+    for z in eye_zones:
+        cx = z["x"] / 100.0 * W
+        cy = z["y"] / 100.0 * H
+        fx, fy = _face_frac(cx, cy, bbox)
+        assert not any(_in_rect(fx, fy, r) for r in _EXCLUDE), \
+            f"маркер в глазу/рту: {z['metric_id']} face=({fx:.3f},{fy:.3f}) img%=({z['x']:.1f},{z['y']:.1f})"
+        if z["metric_id"] in ("dark_circles", "tired_eyes", "puffiness") or "under_eye" in (z.get("region") or ""):
+            assert 0.48 <= fy <= 0.62, \
+                f"подглазье не там: {z['metric_id']} fy={fy:.3f} (ожидали 0.48–0.62)"
+            # зрачки synthetic ~y340 → fy≈0.43; маркер должен быть ниже
+            assert cy > 355, f"маркер слишком высоко (на уровне глаз): y_px={cy:.0f} {z}"
+results.append(run("глазные маркеры — под глазами, не на зрачках", t_eye_markers_under_not_on_pupils))
+
 print()
 print(f"{sum(results)}/{len(results)} проверок пройдено")
 raise SystemExit(0 if all(results) else 1)

@@ -27,9 +27,9 @@ class PhotoQualityError(ValueError):
 _REGIONS = [
     ("forehead", "Лоб", 0.24, 0.13, 0.76, 0.32),
     ("glabella", "Межбровье", 0.41, 0.32, 0.59, 0.41),
-    # Под глазом: узкая полоса сразу под орбитой (не середина щеки)
-    ("left_under_eye", "Под глазом слева", 0.20, 0.48, 0.42, 0.58),
-    ("right_under_eye", "Под глазом справа", 0.58, 0.48, 0.80, 0.58),
+    # Под глазом: сразу под нижним веком (не зрачок, не середина щеки)
+    ("left_under_eye", "Под глазом слева", 0.20, 0.48, 0.44, 0.60),
+    ("right_under_eye", "Под глазом справа", 0.56, 0.48, 0.80, 0.60),
     ("nose", "Нос", 0.41, 0.42, 0.59, 0.66),
     # Носогубная складка: диагональ от крыла носа к уголку рта (не «яблоко» щеки)
     ("left_nasolabial", "Носогубная зона слева", 0.28, 0.58, 0.43, 0.76),
@@ -41,10 +41,11 @@ _REGIONS = [
     ("chin", "Подбородок", 0.36, 0.90, 0.64, 1.0),
 ]
 
-# Глаза с бровями и рот (с запасом на широкую улыбку) исключаются полностью.
+# Глаза (зрачок/радужка/веко) и рот — маркеры сюда не ставим.
+# Нижняя граница глаз ~0.47: ниже начинается подглазье.
 _EXCLUDE = [
-    (0.10, 0.36, 0.45, 0.54),
-    (0.55, 0.36, 0.90, 0.54),
+    (0.08, 0.32, 0.48, 0.47),   # левый глаз + веко
+    (0.52, 0.32, 0.92, 0.47),   # правый глаз + веко
     (0.28, 0.78, 0.72, 0.92),
     (0.34, 0.72, 0.66, 0.78),
 ]
@@ -1096,24 +1097,119 @@ def _detect_nasolabial(grid, bbox, regions, base):
     return findings
 
 
+def _anchor_under_eye(cx, cy, bbox, rid):
+    """
+    Жёсткий якорь маркера в подглазье: никогда не на зрачке/веке.
+    Возвращает (cx, cy) в координатах сетки.
+    """
+    x0, y0, x1, y1 = bbox
+    fw = max(1, x1 - x0)
+    fh = max(1, y1 - y0)
+    # вертикаль: сразу под веком (0.50–0.57), не зрачок (~0.40) и не щека
+    cy = y0 + max(0.50, min(0.57, (cy - y0) / fh)) * fh
+    if "left" in rid:
+        cx = x0 + max(0.24, min(0.40, (cx - x0) / fw)) * fw
+        cx = 0.35 * cx + 0.65 * (x0 + 0.32 * fw)
+    else:
+        cx = x0 + max(0.60, min(0.76, (cx - x0) / fw)) * fw
+        cx = 0.35 * cx + 0.65 * (x0 + 0.68 * fw)
+    return cx, cy
+
+
+def _geom_hits_forbidden(grid, geom, bbox):
+    """True, если центр маркера попал в глаз/рот/линию роста."""
+    cx = geom["x"] / 100.0 * grid.w
+    cy = geom["y"] / 100.0 * grid.h
+    fx, fy = _face_frac(cx, cy, bbox)
+    if any(_in_rect(fx, fy, r) for r in _EXCLUDE):
+        return True
+    # линия роста / чёлка
+    if fy < 0.16:
+        return True
+    return False
+
+
+def _sanitize_findings_markers(grid, bbox, findings):
+    """Починить или отбросить маркеры, попавшие на глаза/волосы."""
+    out = []
+    x0, y0, x1, y1 = bbox
+    fh = max(1, y1 - y0)
+    for f in findings:
+        geom = f.get("geom")
+        if not geom:
+            continue
+        rid = f.get("region") or ""
+        ftype = f.get("type") or ""
+        eye_related = (
+            "under_eye" in rid
+            or ftype in ("dark_circles", "tired_eyes", "puffiness")
+            or (ftype == "wrinkles" and "under_eye" in rid)
+        )
+        cx = geom["x"] / 100.0 * grid.w
+        cy = geom["y"] / 100.0 * grid.h
+        fx, fy = _face_frac(cx, cy, bbox)
+        forbidden = _geom_hits_forbidden(grid, geom, bbox)
+        # глазные признаки — всегда якорим в подглазье (ниже века)
+        if eye_related or (forbidden and ftype in ("dark_circles", "tired_eyes", "puffiness")
+                           and fy < 0.50):
+            side = rid if "under_eye" in rid else (
+                "left_under_eye" if fx < 0.5 else "right_under_eye"
+            )
+            if "left" not in side and "right" not in side:
+                side = "left_under_eye" if fx < 0.5 else "right_under_eye"
+            cx, cy = _anchor_under_eye(cx, cy, bbox, side)
+            f = {
+                **f,
+                "region": side if "under_eye" in side else f.get("region"),
+                "region_label": dict((r[0], r[1]) for r in _REGIONS).get(
+                    side, f.get("region_label")
+                ) if eye_related else f.get("region_label"),
+                "geom": _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2),
+            }
+            if _geom_hits_forbidden(grid, f["geom"], bbox):
+                cy = y0 + 0.53 * fh
+                cx = x0 + (0.32 if "left" in side else 0.68) * max(1, x1 - x0)
+                f = {
+                    **f,
+                    "geom": _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2),
+                }
+        elif forbidden:
+            # пигментация/поры/морщины на зрачке или в волосах — не показываем
+            continue
+        # поры/пигмент на линии роста — уже отсекаются отдельно; доп. проверка
+        cy2 = f["geom"]["y"] / 100.0 * grid.h
+        if f.get("type") in ("pores", "pigmentation") and _face_frac(
+            f["geom"]["x"] / 100.0 * grid.w, cy2, bbox
+        )[1] < 0.20:
+            continue
+        out.append(f)
+    return out
+
+
 def _detect_dark_circles(grid, bbox, regions, base):
     findings = []
     raw_sides = {}
     x0, y0, x1, y1 = bbox
-    fh = max(1, y1 - y0)
     for rid in ("left_under_eye", "right_under_eye"):
         pts = regions.get(rid) or []
         if len(pts) < 18:
             continue
-        # только непосредственно под глазом (верх зоны)
+        # только слёзная борозда / середина подглазья (не веко, не щека)
         filtered = []
         for x, y in pts:
             fx, fy = _face_frac(x, y, bbox)
-            if fy > 0.57:
+            if fy < 0.49 or fy > 0.59:
+                continue
+            if any(_in_rect(fx, fy, r) for r in _EXCLUDE):
                 continue
             filtered.append((x, y))
         if len(filtered) < 12:
-            filtered = pts
+            # мягкий запас: нижние 70% зоны under_eye
+            filtered = [
+                (x, y) for x, y in pts
+                if _face_frac(x, y, bbox)[1] >= 0.49
+                and not any(_in_rect(*_face_frac(x, y, bbox), r) for r in _EXCLUDE)
+            ] or pts
         dark = [(x, y) for x, y in filtered if base["luma"] - grid.luma[y * grid.w + x] > 16]
         frac = len(dark) / max(1, len(filtered))
         raw_sides[rid] = (frac, dark, filtered)
@@ -1133,11 +1229,7 @@ def _detect_dark_circles(grid, bbox, regions, base):
         core = dark_sorted[: max(6, len(dark_sorted) // 3)]
         cx = sum(p[0] for p in core) / len(core)
         cy = sum(p[1] for p in core) / len(core)
-        # якорь: центр маркера в слёзной борозде, не на щеке
-        cy = min(cy, y0 + 0.545 * fh)
-        fx, fy = _face_frac(cx, cy, bbox)
-        if fy > 0.56:
-            cy = y0 + 0.53 * fh
+        cx, cy = _anchor_under_eye(cx, cy, bbox, rid)
         bx0, by0 = min(p[0] for p in core), min(p[1] for p in core)
         bx1, by1 = max(p[0] for p in core), max(p[1] for p in core)
         strength = min(1.0, (deficit - 16) / 32.0 + (frac - frac_floor) * 0.9)
@@ -1157,7 +1249,10 @@ def _detect_dark_circles(grid, bbox, regions, base):
         found = findings[0]
         other = "left_under_eye" if found["region"] == "right_under_eye" else "right_under_eye"
         pts = regions.get(other) or []
-        pts = [p for p in pts if _face_frac(p[0], p[1], bbox)[1] <= 0.57] or list(pts)
+        pts = [
+            p for p in pts
+            if 0.57 <= _face_frac(p[0], p[1], bbox)[1] <= 0.67
+        ] or list(pts)
         if len(pts) >= 8:
             ranked = sorted(
                 pts, key=lambda p: base["luma"] - grid.luma[p[1] * grid.w + p[0]], reverse=True
@@ -1174,10 +1269,10 @@ def _detect_dark_circles(grid, bbox, regions, base):
             cy0 = g["y"] / 100.0 * grid.h
             fx, fy = _face_frac(cx0, cy0, bbox)
             cx = x0 + (1.0 - fx) * fw
-            cy = y0 + fy * fh
+            cy = y0 + fy * max(1, y1 - y0)
             bx0 = by0 = int(cx)
             bx1 = by1 = int(cy)
-        cy = min(cy, y0 + 0.545 * fh)
+        cx, cy = _anchor_under_eye(cx, cy, bbox, other)
         label = dict((r[0], r[1]) for r in _REGIONS)[other]
         findings.append({
             "type": "dark_circles", "region": other, "region_label": label,
@@ -1554,7 +1649,7 @@ def _detect_puffiness(grid, bbox, regions, base):
         cheek = regions.get(cheek_id) or []
         if len(under) < 14 or len(cheek) < 30:
             continue
-        under = [p for p in under if _face_frac(p[0], p[1], bbox)[1] <= 0.57] or under
+        under = [p for p in under if 0.49 <= _face_frac(p[0], p[1], bbox)[1] <= 0.58] or under
         if len(under) < 10:
             continue
         u_luma = sum(grid.luma[y * grid.w + x] for x, y in under) / len(under)
@@ -1573,6 +1668,7 @@ def _detect_puffiness(grid, bbox, regions, base):
             continue  # это скорее тёмные круги
         cx = sum(p[0] for p in under) / len(under)
         cy = sum(p[1] for p in under) / len(under)
+        cx, cy = _anchor_under_eye(cx, cy, bbox, under_id)
         bx0, by0 = min(p[0] for p in under), min(p[1] for p in under)
         bx1, by1 = max(p[0] for p in under), max(p[1] for p in under)
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[under_id]
@@ -1675,9 +1771,13 @@ def _detect_wrinkles(grid, bbox, regions, base):
         pts = regions.get(rid) or []
         if len(pts) < 28:
             continue
-        # под глазом — только верх зоны
+        # под глазом — середина зоны (не веко/зрачок)
         if "under_eye" in rid:
-            pts = [p for p in pts if _face_frac(p[0], p[1], bbox)[1] <= 0.57] or pts
+            pts = [
+                p for p in pts
+                if 0.49 <= _face_frac(p[0], p[1], bbox)[1] <= 0.58
+                and not any(_in_rect(*_face_frac(p[0], p[1], bbox), r) for r in _EXCLUDE)
+            ] or pts
         gx_sum = gy_sum = 0.0
         for x, y in pts:
             gx, gy = grid.grad(x, y)
@@ -1748,13 +1848,7 @@ def _detect_wrinkles(grid, bbox, regions, base):
         )[: max(6, len(pts_pref) // 8)]
         cx = sum(s[1] for s in strong) / len(strong)
         cy = sum(s[2] for s in strong) / len(strong)
-        cy = min(cy, y0 + 0.545 * fh)
-        # якорь к середине подглазья
-        fw = max(1, x1 - x0)
-        if "left" in rid:
-            cx = 0.45 * cx + 0.55 * (x0 + 0.31 * fw)
-        else:
-            cx = 0.45 * cx + 0.55 * (x0 + 0.69 * fw)
+        cx, cy = _anchor_under_eye(cx, cy, bbox, rid)
         bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
         bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
@@ -1777,7 +1871,8 @@ def _detect_wrinkles(grid, bbox, regions, base):
                     ((grid.grad(x, y)[1], x, y) for x, y in pts), reverse=True
                 )[: max(6, len(pts) // 8)]
                 cx = sum(s[1] for s in strong) / len(strong)
-                cy = min(sum(s[2] for s in strong) / len(strong), y0 + 0.545 * fh)
+                cy = sum(s[2] for s in strong) / len(strong)
+                cx, cy = _anchor_under_eye(cx, cy, bbox, other)
                 bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
                 bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
                 rlabel = dict((r[0], r[1]) for r in _REGIONS)[other]
@@ -1796,7 +1891,8 @@ def _detect_wrinkles(grid, bbox, regions, base):
             cy0 = g["y"] / 100.0 * grid.h
             fx, fy = _face_frac(cx0, cy0, bbox)
             cx = x0 + (1.0 - fx) * fw
-            cy = min(y0 + fy * fh, y0 + 0.545 * fh)
+            cy = y0 + fy * fh
+            cx, cy = _anchor_under_eye(cx, cy, bbox, other)
             rlabel = dict((r[0], r[1]) for r in _REGIONS)[other]
             findings.append({
                 "type": "wrinkles", "region": other, "region_label": rlabel,
@@ -1887,6 +1983,7 @@ def analyze(image_bytes):
 
     merged = _merge_findings(raw)
     merged = _drop_hairline_false_pores(merged, bbox)
+    merged = _sanitize_findings_markers(grid, bbox, merged)
     # Сосудистая краснота уже описывает щёки — не дублируем её ещё и
     # обычной «краснотой» в тех же зонах.
     if any(f["type"] == "rosacea_like" for f in merged):
@@ -1896,6 +1993,7 @@ def analyze(image_bytes):
         ]
     # усталость взгляда — вторичный визуальный вывод из уже найденных зон глаз
     merged += _detect_tired_eyes(merged)
+    merged = _sanitize_findings_markers(grid, bbox, merged)
     findings = [f for f in merged if f["confidence"] >= CONF_FLOOR]
     findings.sort(key=lambda f: (f["confidence"] + f["strength"]), reverse=True)
     findings = findings[:MAX_FINDINGS]
