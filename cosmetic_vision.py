@@ -2491,22 +2491,29 @@ def _crow_feet_pts(grid, bbox, side, eyes=None, regions=None):
 
 
 def _anchor_crow_feet(bbox, side, eyes=None):
-    """Маркер на внешнем углу глаза (гусиные лапки), не на зрачке и не на щеке."""
+    """
+    Маркер на внешнем углу глаза (гусиные лапки).
+    Выше и наружнее подглазья: у кантуса, где лучи складок, а не на щеке.
+    """
     x0, y0, x1, y1 = bbox
     fw = max(1, x1 - x0)
     fh = max(1, y1 - y0)
     eye = (eyes or {}).get(side)
     if eye:
         ex, ey = eye[0], eye[1]
-        cx = ex + (-0.095 * fw if side == "left" else 0.095 * fw)
-        cy = ey + 0.040 * fh
-        cy = min(max(cy, ey + 0.028 * fh), ey + 0.070 * fh)
-        cy = min(max(cy, y0 + 0.455 * fh), y0 + 0.525 * fh)
-        cx = max(x0 + 0.06 * fw, min(x1 - 0.06 * fw, cx))
+        eye_h = eye[2] if len(eye) > 2 else 0.075 * fh
+        # наружу от зрачка к виску (~полширины глаза + запас)
+        cx = ex + (-0.145 * fw if side == "left" else 0.145 * fw)
+        # почти на уровне внешнего угла, чуть ниже века
+        cy = ey + max(0.008 * fh, eye_h * 0.18)
+        cy = min(max(cy, ey + 0.004 * fh), ey + 0.032 * fh)
+        # не уводить в подглазье / щёку
+        cy = min(max(cy, y0 + 0.40 * fh), y0 + 0.495 * fh)
+        cx = max(x0 + 0.04 * fw, min(x1 - 0.04 * fw, cx))
         return cx, cy
     if side == "left":
-        return x0 + 0.18 * fw, y0 + 0.48 * fh
-    return x0 + 0.82 * fw, y0 + 0.48 * fh
+        return x0 + 0.16 * fw, y0 + 0.455 * fh
+    return x0 + 0.84 * fw, y0 + 0.455 * fh
 
 
 def _ridge_peak_count(grid, pts, direction="horizontal"):
