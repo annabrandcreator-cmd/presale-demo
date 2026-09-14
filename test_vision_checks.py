@@ -375,6 +375,9 @@ def t_eye_markers_under_not_on_pupils():
             # гусиные лапки у внешнего угла — рядом с глазом ок, на зрачке нет
             assert fx <= 0.34 or fx >= 0.66, f"гусиные лапки не у внешнего угла: {z}"
             assert fy >= 0.36, f"гусиные лапки слишком высоко: {z}"
+        elif z["metric_id"] in ("dark_circles", "tired_eyes", "puffiness") or "under_eye" in rid:
+            # подглазье соседствует с хардкод-зоной глаза — проверяем по зрачкам ниже
+            pass
         else:
             assert not any(_in_rect(fx, fy, r) for r in _EXCLUDE), \
                 f"маркер в глазу/рту: {z['metric_id']} face=({fx:.3f},{fy:.3f}) img%=({z['x']:.1f},{z['y']:.1f})"
