@@ -1362,8 +1362,9 @@ _EYE_MARKER_OFFSET = {
 
 def _anchor_under_eye(cx, cy, bbox, rid, eyes=None, ftype=None):
     """
-    Якорь в подглазье: сразу под нижним веком, не на зрачке и не на щеке.
-    База — от найденного зрачка; абсолютный clamp только как страховка.
+    Якорь строго ПОД нижним веком: только от найденного зрачка.
+    Никакого абсолютного clamp по доле лица — на крупном селфи глаза
+    ниже 0.48 высоты бокса, и старый clamp сажал маркеры на зрачки.
     """
     x0, y0, x1, y1 = bbox
     fw = max(1, x1 - x0)
@@ -1375,13 +1376,12 @@ def _anchor_under_eye(cx, cy, bbox, rid, eyes=None, ftype=None):
     if eye:
         ex, ey = eye[0], eye[1]
         eye_h = eye[2] if len(eye) > 2 else 0.075 * fh
-        # сразу под веком: ~0.55–0.9 высоты глаза, не больше ~9% лица
-        drop = min(0.095 * fh, max(0.068 * fh, eye_h * 0.90))
+        # сразу под веком: не меньше ~0.7 высоты глаза и не на щеке
+        drop = min(0.11 * fh, max(0.072 * fh, eye_h * 1.05))
         cy = ey + drop + dy_extra * fh
-        # относительно зрачка: не на веке, не на середине щеки
-        cy = min(max(cy, ey + 0.060 * fh), ey + 0.105 * fh)
-        # абсолютная страховка: ниже зоны зрачка (_EXCLUDE до ~0.47), выше щеки
-        cy = min(max(cy, y0 + 0.485 * fh), y0 + 0.545 * fh)
+        # жёстко ниже зрачка — иначе «очки»
+        cy = max(cy, ey + max(0.070 * fh, eye_h * 0.95))
+        cy = min(cy, ey + 0.125 * fh)
         dx = dx_frac * fw if side == "left" else -dx_frac * fw
         cx = max(x0 + 0.12 * fw, min(x1 - 0.12 * fw, ex + dx))
         return cx, cy
@@ -1397,7 +1397,7 @@ def _anchor_under_eye(cx, cy, bbox, rid, eyes=None, ftype=None):
 
 
 def _geom_hits_eye(geom, bbox, eyes, grid):
-    """True, если маркер слишком близко к зрачку (эффект «очков»)."""
+    """True, если маркер на зрачке/веке, а не в подглазье."""
     if not eyes:
         return False
     cx = geom["x"] / 100.0 * grid.w
@@ -1407,11 +1407,13 @@ def _geom_hits_eye(geom, bbox, eyes, grid):
     for eye in eyes.values():
         ex, ey = eye[0], eye[1]
         eye_h = eye[2] if len(eye) > 2 else 0.075 * fh
-        min_dist = max(0.075 * fh, eye_h * 0.95)
-        if (cx - ex) ** 2 + (cy - ey) ** 2 < min_dist ** 2:
+        # уже явно под веком — это не глаз
+        if cy >= ey + max(0.055 * fh, eye_h * 0.70):
+            continue
+        # на уровне глаза / выше в колонке зрачка
+        if abs(cx - ex) < 0.12 * fw:
             return True
-        # строго выше или на уровне глаза в его колонке — это «очки»
-        if abs(cx - ex) < 0.09 * fw and cy < ey + max(0.07 * fh, eye_h * 0.8):
+        if (cx - ex) ** 2 + (cy - ey) ** 2 < (max(0.055 * fh, eye_h * 0.65)) ** 2:
             return True
     return False
 
@@ -1525,6 +1527,16 @@ def _sanitize_findings_markers(grid, bbox, findings, eyes=None):
         if is_crow:
             side = "left" if "left" in rid else "right"
             cx, cy = _anchor_crow_feet(bbox, side, eyes=eyes)
+            geom_c = _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2)
+            # если всё ещё задело глаз — ещё наружу и вниз на кожу
+            if _geom_hits_eye(geom_c, bbox, eyes, grid) and side in eyes:
+                ex, ey = eyes[side][0], eyes[side][1]
+                fw = max(1, x1 - x0)
+                fh = max(1, y1 - y0)
+                cx = ex + (-0.20 * fw if side == "left" else 0.20 * fw)
+                cy = ey + 0.040 * fh
+                cx = max(x0 + 0.02 * fw, min(x1 - 0.02 * fw, cx))
+                geom_c = _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2)
             f = {
                 **f,
                 "region": f"{side}_crow_feet",
@@ -1532,7 +1544,7 @@ def _sanitize_findings_markers(grid, bbox, findings, eyes=None):
                     "У внешнего угла глаза слева" if side == "left"
                     else "У внешнего угла глаза справа"
                 ),
-                "geom": _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2),
+                "geom": geom_c,
             }
             out.append(f)
             continue
@@ -2220,9 +2232,9 @@ def _detect_dullness(grid, bbox, regions, base, metrics_radiance_hint=None):
     return []
 
 
-def _detect_tired_eyes(findings):
+def _detect_tired_eyes(findings, grid=None, bbox=None, eyes=None):
     """Признаки усталости взгляда: тёмные круги и/или мелкие морщины под глазами.
-    Всегда два маркера — под каждым глазом.
+    Всегда два маркера — строго под каждым глазом (не на зрачках).
     """
     under_wrinkles = [
         f for f in findings
@@ -2249,38 +2261,39 @@ def _detect_tired_eyes(findings):
         if side and by_side[side] is None:
             by_side[side] = f
 
-    # если одна сторона — зеркалим геометрию на вторую
     present = [s for s, f in by_side.items() if f]
     if len(present) == 1:
         src = by_side[present[0]]
         other = "right" if present[0] == "left" else "left"
-        g = dict(src.get("geom") or {})
-        if "x" in g:
-            g = {**g, "x": round(100.0 - float(g["x"]), 2)}
-        other_rid = f"{other}_under_eye"
         by_side[other] = {
             **src,
-            "region": other_rid,
+            "region": f"{other}_under_eye",
             "region_label": "Под глазом справа" if other == "right" else "Под глазом слева",
-            "geom": g,
         }
 
     out = []
     for side in ("left", "right"):
         src = by_side.get(side)
-        if not src or not src.get("geom"):
+        if not src:
             continue
-        rid = src.get("region") or f"{side}_under_eye"
+        rid = f"{side}_under_eye"
+        if eyes and side in eyes and bbox is not None and grid is not None:
+            cx, cy = _anchor_under_eye(
+                eyes[side][0], eyes[side][1], bbox, rid, eyes=eyes, ftype="tired_eyes"
+            )
+            geom = _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2)
+        elif src.get("geom"):
+            geom = src["geom"]
+        else:
+            continue
         out.append({
             "type": "tired_eyes",
             "region": rid,
-            "region_label": src.get("region_label") or (
-                "Под глазом слева" if side == "left" else "Под глазом справа"
-            ),
+            "region_label": "Под глазом слева" if side == "left" else "Под глазом справа",
             "strength": min(1.0, src["strength"] * 0.9 + 0.1),
             "confidence": round(min(0.88, src["confidence"] * 0.95), 2),
             "evidence": "видимые признаки усталости в зоне глаз",
-            "geom": src["geom"],
+            "geom": geom,
         })
     return out
 
@@ -2288,8 +2301,9 @@ def _detect_tired_eyes(findings):
 # Скан морщин вокруг глаз идёт по исходному фото: на сетке 168 px
 # тонкие линии просто не разрешаются.
 _SCAN_REF_D = 300.0      # опорное межзрачковое расстояние, px
-_SCAN_UNDER_RATIO = 1.70  # во сколько раз линий больше, чем на гладкой щеке
-_SCAN_CROW_RATIO = 1.45
+_SCAN_UNDER_RATIO = 1.85  # только явные линии, не текстура кожи
+_SCAN_CROW_RATIO = 1.75   # гусиные лапки — от двух складок и выше фона щеки
+_SCAN_MIN_LINES = 2       # одна «линия» слишком часто оказывается тенью/волосами
 
 
 def _scan_patch(arr, rect, scale):
@@ -2378,16 +2392,17 @@ def _scan_line_energy(patch, allow_diagonal=False):
     }
 
 
-def _scan_verdict(zone, ref, ratio_floor):
+def _scan_verdict(zone, ref, ratio_floor, min_lines=None):
     """Морщины есть, если линий заметно больше, чем на гладкой щеке того же кадра."""
     if not zone or not ref:
         return None
+    need = _SCAN_MIN_LINES if min_lines is None else min_lines
     r98 = zone["p98"] / max(0.8, ref["p98"])
     hit = (
         r98 >= ratio_floor
-        and zone["p90"] >= 3.5
-        and zone["p98"] >= 6.0
-        and zone["lines"] >= 1
+        and zone["p90"] >= 4.0
+        and zone["p98"] >= 7.0
+        and zone["lines"] >= need
     )
     over = max(0.0, r98 - ratio_floor)
     return {
@@ -2464,10 +2479,9 @@ def _eye_line_scan(source_img, grid, bbox, eyes):
         )
         under_v = _scan_verdict(under, ref, _SCAN_UNDER_RATIO)
         crow_v = _scan_verdict(crow, ref, _SCAN_CROW_RATIO)
-        # одиночная «линия» у виска без морщин под глазом — часто тень/волосы
-        if crow_v and crow_v["hit"] and crow and crow["lines"] < 2:
-            if not (under_v and under_v["hit"]):
-                crow_v = {**crow_v, "hit": False}
+        # без двух явных линий гусиные лапки не объявляем — иначе тень у виска
+        if crow_v and crow_v["hit"] and crow and crow["lines"] < _SCAN_MIN_LINES:
+            crow_v = {**crow_v, "hit": False}
         out[side] = {
             "under": under_v,
             "crow": crow_v,
@@ -2519,8 +2533,8 @@ def _crow_feet_pts(grid, bbox, side, eyes=None, regions=None):
 
 def _anchor_crow_feet(bbox, side, eyes=None):
     """
-    Маркер на внешнем углу глаза (гусиные лапки).
-    Выше и наружнее подглазья: у кантуса, где лучи складок, а не на щеке.
+    Маркер на КОЖЕ у внешнего угла (гусиные лапки), не на белке глаза.
+    Наружу и чуть вниз от кантуса.
     """
     x0, y0, x1, y1 = bbox
     fw = max(1, x1 - x0)
@@ -2529,18 +2543,16 @@ def _anchor_crow_feet(bbox, side, eyes=None):
     if eye:
         ex, ey = eye[0], eye[1]
         eye_h = eye[2] if len(eye) > 2 else 0.075 * fh
-        # наружу от зрачка к виску (~полширины глаза + запас)
-        cx = ex + (-0.145 * fw if side == "left" else 0.145 * fw)
-        # почти на уровне внешнего угла, чуть ниже века
-        cy = ey + max(0.008 * fh, eye_h * 0.18)
-        cy = min(max(cy, ey + 0.004 * fh), ey + 0.032 * fh)
-        # не уводить в подглазье / щёку
-        cy = min(max(cy, y0 + 0.40 * fh), y0 + 0.495 * fh)
-        cx = max(x0 + 0.04 * fw, min(x1 - 0.04 * fw, cx))
+        # дальше к виску, чтобы круг не заезжал на глаз
+        cx = ex + (-0.175 * fw if side == "left" else 0.175 * fw)
+        # ниже внешнего угла — на коже, не на склере
+        cy = ey + max(0.022 * fh, eye_h * 0.40)
+        cy = min(max(cy, ey + 0.018 * fh), ey + 0.055 * fh)
+        cx = max(x0 + 0.03 * fw, min(x1 - 0.03 * fw, cx))
         return cx, cy
     if side == "left":
-        return x0 + 0.16 * fw, y0 + 0.455 * fh
-    return x0 + 0.84 * fw, y0 + 0.455 * fh
+        return x0 + 0.14 * fw, y0 + 0.46 * fh
+    return x0 + 0.86 * fw, y0 + 0.46 * fh
 
 
 def _ridge_peak_count(grid, pts, direction="horizontal"):
@@ -3043,9 +3055,11 @@ def analyze(image_bytes):
             if not (f["type"] == "redness" and "cheek" in f["region"])
         ]
     # усталость взгляда — вторичный визуальный вывод из уже найденных зон глаз
-    merged += _detect_tired_eyes(merged)
+    merged += _detect_tired_eyes(merged, grid=grid, bbox=bbox, eyes=eyes)
     merged = _sanitize_findings_markers(grid, bbox, merged, eyes=eyes)
     merged = _pair_eye_findings(grid, bbox, merged, eyes)
+    # после достройки пары ещё раз уводим маркеры со зрачков
+    merged = _sanitize_findings_markers(grid, bbox, merged, eyes=eyes)
     findings = [f for f in merged if f["confidence"] >= CONF_FLOOR]
     findings.sort(key=lambda f: (f["confidence"] + f["strength"]), reverse=True)
     findings = _cap_findings_keeping_pairs(findings, MAX_FINDINGS)

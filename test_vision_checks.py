@@ -386,8 +386,14 @@ def t_eye_markers_under_not_on_pupils():
                 # глаза в сетке → в % исходного кадра
                 ex, ey = eyes[side][0], eyes[side][1]
                 eye_y_pct = 100.0 * ey / gh
-                assert z["y"] > eye_y_pct + 2.0, \
+                assert z["y"] > eye_y_pct + 2.5, \
                     f"маркер не ниже зрачка: zone_y={z['y']} eye_y={eye_y_pct:.1f} {z}"
+            from cosmetic_vision import _geom_hits_eye
+            geom = {"x": z["x"], "y": z["y"], "w": 6, "h": 6}
+            assert not _geom_hits_eye(geom, gb, eyes, grid), \
+                f"маркер попал в глаз: {z['metric_id']} {z}"
+            if z["metric_id"] == "tired_eyes":
+                assert "under_eye" in rid, f"усталость должна быть под глазом: {z}"
 results.append(run("глазные маркеры — под глазами, не на зрачках", t_eye_markers_under_not_on_pupils))
 
 # 13. Тёмные круги и усталость взгляда — маркеры на ОБОИХ глазах
