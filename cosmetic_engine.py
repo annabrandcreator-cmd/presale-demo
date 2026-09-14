@@ -494,7 +494,7 @@ def _zone_dict(f, i):
         "w": f["geom"]["w"],
         "h": f["geom"]["h"],
         "score": f["score"],
-        "status": "Обнаружено",
+        "status": "На фото",
         "attention": "high",
         "severity": f["severity"],
         "severity_label": f["severity_label"],
@@ -585,11 +585,19 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
     if findings:
         top = findings[0]
         priority = _FEATURE_CONCERN.get(top["type"], "dryness")
-        headline = f"Вижу акцент на «{CONCERN_LABELS.get(priority, priority)}»"
+        headline = "Анализ готов"
+        tip = (
+            "По фото определили несколько особенностей кожи, которые стоит учесть при подборе ухода. "
+            "Сейчас уточним ощущения и соберём подходящие средства."
+        )
     else:
         m = vision["metrics"]
         priority = "dryness" if m["hydration"] < 55 else "dullness"
-        headline = "Выраженных проблемных зон не нашла — кожа выглядит ровной"
+        headline = "Анализ готов"
+        tip = (
+            "По фото кожа выглядит относительно ровной — ярких акцентов не отмечено. "
+            "Чтобы подобрать уход точнее, уточним ваши ощущения."
+        )
 
     skin_guess = vision["skin_type"]
     m = vision["metrics"]
@@ -601,8 +609,6 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         {"id": "fine_lines", "label": "Мелкие морщины", "score": m["fine_lines"], "hint": "мелкие морщины"},
         {"id": "barrier", "label": "Барьер кожи", "score": m["barrier"], "hint": "защита"},
     ]
-
-    tip = _CONCERN_TIPS.get(priority, "Соберём уход вокруг вашей главной зоны внимания.")
 
     return {
         "ok": True,
@@ -620,6 +626,6 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         "narrative": [
             "Проверяю свет и зону лица…",
             "Считываю текстуру, тон и зоны внимания…",
-            f"Готово: приоритет — {CONCERN_LABELS.get(priority, priority)}.",
+            "Готово: можно переходить к подбору ухода.",
         ],
     }
