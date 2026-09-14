@@ -504,6 +504,32 @@ def t_no_invented_eye_wrinkles():
     assert not under, f"ложные морщины под глазами на чистом лице: {under}"
 results.append(run("не выдумывать морщины вокруг глаз на ровной коже", t_no_invented_eye_wrinkles))
 
+# 18. Реальные тонкие линии вокруг глаз обязаны находиться
+def t_real_eye_wrinkles_found():
+    """Тонкие складки под глазами и у внешних углов — это морщины, их нельзя пропускать."""
+    img = base_face()
+    d = ImageDraw.Draw(img)
+    # мелкие линии под обоими глазами
+    for x0, x1 in ((215, 295), (345, 425)):
+        for i, y in enumerate(range(372, 400, 6)):
+            inset = 4 * i
+            d.line([x0 + inset, y, x1 - inset, y + 2], fill=(172, 132, 114), width=2)
+    # гусиные лапки: лучи от внешних углов
+    for corner_x, sign in ((213, -1), (427, 1)):
+        for k, dy in enumerate((-10, 0, 10)):
+            d.line(
+                [corner_x, 340 + dy, corner_x + sign * 34, 340 + dy + (k - 1) * 8],
+                fill=(172, 132, 114),
+                width=2,
+            )
+    img = img.filter(ImageFilter.GaussianBlur(0.4))
+    scan = cosmetic_engine.analyze_skin_photo(to_bytes(img))
+    wr = [z for z in scan["zones"] if z["metric_id"] == "wrinkles"]
+    assert wr, f"морщины не найдены, хотя линии есть: {[z['metric_id'] for z in scan['zones']]}"
+    sides = {"left" if "left" in (z.get("region") or "") else "right" for z in wr}
+    assert len(sides) == 2, f"морщины найдены только с одной стороны: {wr}"
+results.append(run("реальные морщины вокруг глаз — находятся", t_real_eye_wrinkles_found))
+
 
 
 print()

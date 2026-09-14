@@ -14,7 +14,7 @@ from collections import deque
 GRID_W = 168          # ширина рабочей сетки анализа
 MIN_SOURCE_SIDE = 200  # минимальный размер исходного фото, px
 CONF_FLOOR = 0.62      # признаки с меньшей уверенностью не показываем
-MAX_FINDINGS = 8       # максимум областей в сыром результате
+MAX_FINDINGS = 12      # максимум областей в сыром результате (пара на признак)
 
 
 class PhotoQualityError(ValueError):
@@ -2285,6 +2285,169 @@ def _detect_tired_eyes(findings):
     return out
 
 
+# Скан морщин вокруг глаз идёт по исходному фото: на сетке 168 px
+# тонкие линии просто не разрешаются.
+_SCAN_REF_D = 300.0      # опорное межзрачковое расстояние, px
+_SCAN_UNDER_RATIO = 1.70  # во сколько раз линий больше, чем на гладкой щеке
+_SCAN_CROW_RATIO = 1.45
+
+
+def _scan_patch(arr, rect, scale):
+    """Участок исходного фото в едином масштабе (по межзрачковому расстоянию)."""
+    h, w = arr.shape[:2]
+    x0, y0, x1, y1 = (int(round(v)) for v in rect)
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(w, x1), min(h, y1)
+    if x1 - x0 < 14 or y1 - y0 < 10:
+        return None
+    crop = arr[y0:y1, x0:x1]
+    if scale < 1.0:
+        import cv2
+        crop = cv2.resize(
+            crop,
+            (max(14, int(crop.shape[1] * scale)), max(10, int(crop.shape[0] * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+    return crop
+
+
+def _scan_line_energy(patch):
+    """
+    Энергия тонких тёмных линий на коже участка.
+    blackhat отзывается на узкие складки и не реагирует на плавную тень.
+    """
+    if patch is None:
+        return None
+    import cv2
+    import numpy as np
+
+    ycc = cv2.cvtColor(patch, cv2.COLOR_RGB2YCrCb)
+    cr = ycc[:, :, 1].astype(np.int16)
+    cb = ycc[:, :, 2].astype(np.int16)
+    luma = ycc[:, :, 0]
+    skin = (
+        (cr >= 132) & (cr <= 185) & (cb >= 76) & (cb <= 132) & (luma >= 60)
+    ).astype(np.uint8)
+    gray = cv2.cvtColor(patch, cv2.COLOR_RGB2GRAY)
+    med = float(np.median(gray[skin > 0])) if skin.any() else float(np.median(gray))
+    # ресницы, зрачок и пряди волос темнее кожи — они не морщины.
+    # Порог заметно ниже кожи: сама складка темнее лишь чуть-чуть и
+    # обязана дойти до анализа.
+    dark = cv2.dilate((gray < med - 45).astype(np.uint8), np.ones((3, 3), np.uint8))
+    skin = skin * (1 - dark)
+    skin_frac = float(skin.mean())
+    if skin_frac < 0.45:
+        return None
+    bh = cv2.morphologyEx(
+        cv2.GaussianBlur(gray, (3, 3), 0),
+        cv2.MORPH_BLACKHAT,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)),
+    )
+    vals = bh[skin > 0].astype(np.float32)
+    if vals.size < 60:
+        return None
+    mask = ((bh >= max(6, np.percentile(vals, 93))) * skin).astype(np.uint8)
+    mask = cv2.morphologyEx(
+        mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 1))
+    )
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+    nh, nw = mask.shape
+    lines = 0
+    horizontal = np.zeros_like(mask)
+    for i in range(1, count):
+        _, _, cw, ch, area = stats[i]
+        length = max(cw, ch)
+        thick = max(1, min(cw, ch))
+        if area < 5 or length < max(6, 0.13 * nw) or length / thick < 2.0:
+            continue
+        # морщины у глаз идут поперёк лица; вертикальные тяжи — это пряди волос
+        if cw < ch:
+            continue
+        lines += 1
+        horizontal[labels == i] = 1
+    return {
+        "p90": float(np.percentile(vals, 90)),
+        "p98": float(np.percentile(vals, 98)),
+        "cover": float(horizontal.mean()),
+        "lines": lines,
+        "skin": skin_frac,
+    }
+
+
+def _scan_verdict(zone, ref, ratio_floor):
+    """Морщины есть, если линий заметно больше, чем на гладкой щеке того же кадра."""
+    if not zone or not ref:
+        return None
+    r98 = zone["p98"] / max(0.8, ref["p98"])
+    hit = (
+        r98 >= ratio_floor
+        and zone["p90"] >= 3.5
+        and zone["p98"] >= 6.0
+        and zone["lines"] >= 1
+    )
+    over = max(0.0, r98 - ratio_floor)
+    return {
+        "hit": hit,
+        "ratio": r98,
+        "lines": zone["lines"],
+        "strength": max(0.30, min(0.95, 0.34 + over * 0.26 + zone["lines"] * 0.05)),
+        "confidence": round(max(0.50, min(0.88, 0.56 + over * 0.11 + zone["lines"] * 0.03)), 2),
+    }
+
+
+def _eye_line_scan(source_img, grid, bbox, eyes):
+    """
+    Морщины вокруг глаз по исходному фото, а не по сетке.
+    Зона глаза сравнивается с гладкой щекой того же кадра, поэтому
+    разрешение, свет и JPEG-шум не сдвигают порог.
+    """
+    if source_img is None or not eyes:
+        return None
+    try:
+        import cv2  # noqa: F401
+        import numpy as np
+    except ImportError:
+        return None
+    left, right = eyes.get("left"), eyes.get("right")
+    if not left or not right:
+        return None
+    try:
+        arr = np.asarray(source_img.convert("RGB"))
+    except Exception:
+        return None
+    src_h, src_w = arr.shape[:2]
+    sx = src_w / max(1, grid.w - 1)
+    sy = src_h / max(1, grid.h - 1)
+    px = {s: (eyes[s][0] * sx, eyes[s][1] * sy) for s in ("left", "right")}
+    dist = abs(px["right"][0] - px["left"][0])
+    if dist < 40:
+        return None
+    scale = min(1.0, _SCAN_REF_D / dist)
+    out = {}
+    for side in ("left", "right"):
+        ex, ey = px[side]
+        sign = -1 if side == "left" else 1
+        under = _scan_line_energy(
+            _scan_patch(arr, (ex - 0.23 * dist, ey + 0.16 * dist,
+                              ex + 0.23 * dist, ey + 0.38 * dist), scale)
+        )
+        cx0 = ex + sign * 0.22 * dist
+        cx1 = ex + sign * 0.42 * dist
+        crow = _scan_line_energy(
+            _scan_patch(arr, (min(cx0, cx1), ey - 0.02 * dist,
+                              max(cx0, cx1), ey + 0.24 * dist), scale)
+        )
+        ref = _scan_line_energy(
+            _scan_patch(arr, (ex + sign * 0.02 * dist - 0.16 * dist, ey + 0.60 * dist,
+                              ex + sign * 0.02 * dist + 0.16 * dist, ey + 0.88 * dist), scale)
+        )
+        out[side] = {
+            "under": _scan_verdict(under, ref, _SCAN_UNDER_RATIO),
+            "crow": _scan_verdict(crow, ref, _SCAN_CROW_RATIO),
+        }
+    return out
+
+
 def _crow_feet_pts(grid, bbox, side, eyes=None, regions=None):
     """
     Только кожа у внешнего угла глаза (не волосы у виска, не силуэт).
@@ -2452,12 +2615,15 @@ def _crow_feet_signal(grid, crow, floor, cheek_pts=None, bbox=None, side=None, e
     return hit, gy, gx, int(max(peaks, ray_peaks))
 
 
-def _detect_wrinkles(grid, bbox, regions, base, eyes=None):
+def _detect_wrinkles(grid, bbox, regions, base, eyes=None, source_img=None):
     """
     Морщины = тонкие линии (лоб / межбровье / под глазами / гусиные лапки).
     Под глазом и у внешнего угла — отдельные маркеры.
+    Вокруг глаз решение принимает скан исходного фото: на сетке мелкие
+    линии не разрешаются, поэтому их там не видно вовсе.
     """
     findings = []
+    scan = _eye_line_scan(source_img, grid, bbox, eyes)
     fh_pts = regions.get("forehead") or []
     fh_gy = (
         sum(grid.grad(x, y)[1] for x, y in fh_pts) / len(fh_pts) if len(fh_pts) > 30 else 2.0
@@ -2532,6 +2698,22 @@ def _detect_wrinkles(grid, bbox, regions, base, eyes=None):
 
         # под глазом: только при реальных линиях, не из‑за тени мешка
         line_hit = peaks >= 2 and main >= floor * 0.9 and main >= cross * 1.35
+
+        # скан исходного фото важнее сетки: он видит сами линии
+        sc = (scan or {}).get(side) or {}
+        sc_under, sc_crow = sc.get("under"), sc.get("crow")
+        under_strength = under_conf = None
+        if sc_under:
+            line_hit = sc_under["hit"]
+            if line_hit:
+                peaks = max(peaks, 2 + sc_under["lines"])
+                under_strength = sc_under["strength"]
+                under_conf = sc_under["confidence"]
+        if sc_crow:
+            crow_hit = sc_crow["hit"]
+            if crow_hit:
+                crow_peaks = max(crow_peaks, 2 + sc_crow["lines"])
+
         # 1) гусиные лапки — отдельный маркер
         if crow_hit:
             cx, cy = _anchor_crow_feet(bbox, side, eyes=eyes)
@@ -2539,17 +2721,28 @@ def _detect_wrinkles(grid, bbox, regions, base, eyes=None):
                 "type": "wrinkles",
                 "region": f"{side}_crow_feet",
                 "region_label": crow_labels[side],
-                "strength": min(1.0, 0.35 + crow_gy / 16.0 + crow_peaks * 0.08),
-                "confidence": round(min(0.86, 0.52 + crow_gy / 22.0 + crow_peaks * 0.05), 2),
+                "strength": (
+                    sc_crow["strength"] if sc_crow and sc_crow["hit"]
+                    else min(1.0, 0.35 + crow_gy / 16.0 + crow_peaks * 0.08)
+                ),
+                "confidence": (
+                    # скан подтвердил линии — пара не должна распадаться на пороге
+                    round(max(CONF_FLOOR + 0.02, sc_crow["confidence"]), 2)
+                    if sc_crow and sc_crow["hit"]
+                    else round(min(0.86, 0.52 + crow_gy / 22.0 + crow_peaks * 0.05), 2)
+                ),
                 "evidence": "мелкие морщины у внешнего угла глаза (гусиные лапки)",
                 "geom": _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2),
                 "_line_peaks": crow_peaks,
                 "_bag_score": 0.0,
                 "_crow": True,
+                "_scan": bool(sc_crow and sc_crow["hit"]),
             })
 
-        # 2) под глазом — только линии, не мешок
-        if line_hit and not (bag >= 0.50 and peaks < 3):
+        # 2) под глазом — только линии, не мешок.
+        # Скан уже отделил тонкие линии от контура мешка, ему верим без вето.
+        bag_veto = bag >= 0.50 and peaks < 3 and not (sc_under and sc_under["hit"])
+        if line_hit and not bag_veto:
             strong = sorted(
                 ((grid.grad(x, y)[1], x, y) for x, y in pts), reverse=True
             )[: max(6, len(pts) // 8)]
@@ -2561,6 +2754,8 @@ def _detect_wrinkles(grid, bbox, regions, base, eyes=None):
             rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
             strength = min(1.0, (main - floor) / 6.0 + max(0.0, main / max(0.5, cross) - ratio_floor) * 0.45)
             conf = min(0.86, 0.48 + (main - floor) / 14.0 + peaks * 0.05)
+            if under_strength is not None:
+                strength, conf = under_strength, under_conf
             findings.append({
                 "type": "wrinkles", "region": rid, "region_label": rlabel,
                 "strength": strength, "confidence": round(conf, 2),
@@ -2573,7 +2768,9 @@ def _detect_wrinkles(grid, bbox, regions, base, eyes=None):
 
     # парность crow только если сигнал был сильный (не достраиваем из воздуха)
     crow_found = [f for f in findings if f.get("region", "").endswith("crow_feet")]
-    if len(crow_found) == 1 and crow_found[0].get("_line_peaks", 0) >= 3:
+    if len(crow_found) == 1 and (
+        crow_found[0].get("_line_peaks", 0) >= 3 or crow_found[0].get("_scan")
+    ):
         src = crow_found[0]
         side = "left" if "left" in src["region"] else "right"
         other = "right" if side == "left" else "left"
@@ -2583,6 +2780,11 @@ def _detect_wrinkles(grid, bbox, regions, base, eyes=None):
         hit_o, _, _, peaks_o = _crow_feet_signal(
             grid, crow_o, under_floor, cheek_pts=cheek_o, bbox=bbox, side=other, eyes=eyes
         )
+        # морщины у глаз почти всегда симметричны: на второй стороне
+        # достаточно ослабленного, но реального следа линий
+        sc_o = ((scan or {}).get(other) or {}).get("crow")
+        if sc_o and sc_o["ratio"] >= _SCAN_CROW_RATIO * 0.72:
+            hit_o, peaks_o = True, max(peaks_o, 2 + sc_o["lines"])
         if hit_o:
             cx, cy = _anchor_crow_feet(bbox, other, eyes=eyes)
             findings.append({
@@ -2590,7 +2792,9 @@ def _detect_wrinkles(grid, bbox, regions, base, eyes=None):
                 "region": f"{other}_crow_feet",
                 "region_label": crow_labels[other],
                 "strength": max(0.32, src["strength"] * 0.8),
-                "confidence": round(min(0.80, src["confidence"] * 0.9), 2),
+                "confidence": round(
+                    min(0.80, max(CONF_FLOOR + 0.02, src["confidence"] * 0.9)), 2
+                ),
                 "evidence": "мелкие морщины у внешнего угла глаза (гусиные лапки)",
                 "geom": _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2),
                 "_crow": True,
@@ -2609,7 +2813,11 @@ def _detect_wrinkles(grid, bbox, regions, base, eyes=None):
                 _ridge_peak_count(grid, pts, "horizontal"),
                 _line_peak_count(grid, pts, "horizontal"),
             )
-            if peaks >= 2 and main >= floor * 0.85 and not (bag >= 0.55 and peaks < 3):
+            sc_o = ((scan or {}).get("left" if "left" in other else "right") or {}).get("under")
+            pair_hit = peaks >= 2 and main >= floor * 0.85 and not (bag >= 0.55 and peaks < 3)
+            if sc_o:
+                pair_hit = sc_o["ratio"] >= _SCAN_UNDER_RATIO * 0.75
+            if pair_hit:
                 strong = sorted(
                     ((grid.grad(x, y)[1], x, y) for x, y in pts), reverse=True
                 )[: max(6, len(pts) // 8)]
@@ -2619,10 +2827,13 @@ def _detect_wrinkles(grid, bbox, regions, base, eyes=None):
                 bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
                 bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
                 rlabel = dict((r[0], r[1]) for r in _REGIONS)[other]
+                # парный маркер не должен отсеиваться порогом уверенности:
+                # морщины вокруг глаз симметричны, один кружок выглядит ошибкой
+                pair_conf = max(CONF_FLOOR + 0.02, found["confidence"] * 0.90)
                 findings.append({
                     "type": "wrinkles", "region": other, "region_label": rlabel,
                     "strength": max(0.3, found["strength"] * 0.75),
-                    "confidence": round(min(0.80, found["confidence"] * 0.90), 2),
+                    "confidence": round(min(0.80, pair_conf), 2),
                     "evidence": evidence,
                     "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
                 })
@@ -2680,20 +2891,33 @@ def _merge_findings(raw):
 
 
 def _cap_findings_keeping_pairs(findings, limit):
-    """Обрезаем список, но никогда не оставляем глазной признак в одиночестве."""
+    """
+    Обрезаем список, но никогда не оставляем глазной признак в одиночестве.
+    Сначала по одному признаку каждого типа: иначе сильная краснота с
+    тёмными кругами занимают все места и морщины не доходят до отчёта.
+    """
+    by_type = {}
+    for f in findings:
+        by_type.setdefault(f.get("type"), []).append(f)
+    findings = [f for ftype in by_type for f in by_type[ftype]]
     kept = findings[:limit]
     kept_ids = {id(f) for f in kept}
-    eye_types = {f.get("type") for f in kept if _is_eye_finding(f)}
-    for ftype in eye_types:
+    # «гусиные лапки» и подглазье — разные пары одного типа
+    def _pair_key(f):
+        spot = "crow" if "crow_feet" in (f.get("region") or "") else "under"
+        return f.get("type"), spot
+
+    eye_keys = {_pair_key(f) for f in kept if _is_eye_finding(f)}
+    for key in eye_keys:
         sides = {
             "left" if "left" in (f.get("region") or "") else "right"
             for f in kept
-            if f.get("type") == ftype and _is_eye_finding(f)
+            if _pair_key(f) == key and _is_eye_finding(f)
         }
         if len(sides) >= 2:
             continue
         for f in findings:
-            if id(f) in kept_ids or f.get("type") != ftype or not _is_eye_finding(f):
+            if id(f) in kept_ids or _pair_key(f) != key or not _is_eye_finding(f):
                 continue
             side = "left" if "left" in (f.get("region") or "") else "right"
             if side in sides:
@@ -2765,7 +2989,7 @@ def analyze(image_bytes):
     raw += _detect_shine(grid, bbox, regions, base)
     raw += _detect_dryness(grid, bbox, regions, base)
     raw += _detect_puffiness(grid, bbox, regions, base)
-    raw += _detect_wrinkles(grid, bbox, regions, base, eyes=eyes)
+    raw += _detect_wrinkles(grid, bbox, regions, base, eyes=eyes, source_img=img)
     raw += _detect_nasolabial(grid, bbox, regions, base)
     raw += _detect_dullness(grid, bbox, regions, base)
 
