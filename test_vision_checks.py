@@ -332,23 +332,33 @@ results.append(run("чёлка/волосы на лбу ≠ расширенны
 
 # 12. Тёмные круги / морщины / усталость — маркеры ПОД глазами, не на зрачках
 def t_eye_markers_under_not_on_pupils():
-    from cosmetic_vision import _detect_face_haar, _face_frac, _EXCLUDE, _in_rect
+    from cosmetic_vision import (
+        _detect_face_haar, _face_frac, _EXCLUDE, _in_rect,
+        _decode, _Grid, _find_eye_centers,
+    )
     img = base_face()
     d = ImageDraw.Draw(img)
-    # выраженные тени сразу под глазами (глаза на synthetic ~y 320–360)
     d.ellipse([210, 365, 300, 415], fill=(135, 100, 85))
     d.ellipse([340, 365, 430, 415], fill=(135, 100, 85))
-    # лёгкие горизонтальные «морщинки» в той же полосе
     for y in (372, 380, 388):
         d.line([(220, y), (290, y)], fill=(125, 95, 80), width=1)
         d.line([(350, y), (420, y)], fill=(125, 95, 80), width=1)
-    scan = cosmetic_engine.analyze_skin_photo(to_bytes(img))
+    data = to_bytes(img)
+    scan = cosmetic_engine.analyze_skin_photo(data)
     face = _detect_face_haar(img)
     assert face, "лицо не найдено"
     bbox = (
         int(face[0] * W), int(face[1] * H),
         int(face[2] * W), int(face[3] * H),
     )
+    # рабочие координаты сетки анализа
+    _img2, px, gw, gh = _decode(data)
+    grid = _Grid(px, gw, gh)
+    gb = (
+        max(0, int(face[0] * gw)), max(0, int(face[1] * gh)),
+        min(gw - 1, int(face[2] * gw)), min(gh - 1, int(face[3] * gh)),
+    )
+    eyes = _find_eye_centers(grid, gb, source_img=_img2)
     eye_types = ("dark_circles", "tired_eyes", "wrinkles", "puffiness")
     eye_zones = [
         z for z in scan["zones"]
@@ -363,10 +373,15 @@ def t_eye_markers_under_not_on_pupils():
         assert not any(_in_rect(fx, fy, r) for r in _EXCLUDE), \
             f"маркер в глазу/рту: {z['metric_id']} face=({fx:.3f},{fy:.3f}) img%=({z['x']:.1f},{z['y']:.1f})"
         if z["metric_id"] in ("dark_circles", "tired_eyes", "puffiness") or "under_eye" in (z.get("region") or ""):
-            assert 0.48 <= fy <= 0.62, \
-                f"подглазье не там: {z['metric_id']} fy={fy:.3f} (ожидали 0.48–0.62)"
-            # зрачки synthetic ~y340 → fy≈0.43; маркер должен быть ниже
+            # ниже зрачков synthetic (~y340) и ниже найденных глаз
             assert cy > 355, f"маркер слишком высоко (на уровне глаз): y_px={cy:.0f} {z}"
+            side = "left" if z["x"] < 50 else "right"
+            if side in eyes:
+                # глаза в сетке → в % исходного кадра
+                ex, ey = eyes[side]
+                eye_y_pct = 100.0 * ey / gh
+                assert z["y"] > eye_y_pct + 2.5, \
+                    f"маркер не ниже зрачка: zone_y={z['y']} eye_y={eye_y_pct:.1f} {z}"
 results.append(run("глазные маркеры — под глазами, не на зрачках", t_eye_markers_under_not_on_pupils))
 
 # 13. Тёмные круги и усталость взгляда — маркеры на ОБОИХ глазах
