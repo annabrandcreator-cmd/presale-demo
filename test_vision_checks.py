@@ -370,9 +370,15 @@ def t_eye_markers_under_not_on_pupils():
         cx = z["x"] / 100.0 * W
         cy = z["y"] / 100.0 * H
         fx, fy = _face_frac(cx, cy, bbox)
-        assert not any(_in_rect(fx, fy, r) for r in _EXCLUDE), \
-            f"маркер в глазу/рту: {z['metric_id']} face=({fx:.3f},{fy:.3f}) img%=({z['x']:.1f},{z['y']:.1f})"
-        if z["metric_id"] in ("dark_circles", "tired_eyes", "puffiness") or "under_eye" in (z.get("region") or ""):
+        rid = z.get("region") or ""
+        if "crow_feet" in rid:
+            # гусиные лапки у внешнего угла — рядом с глазом ок, на зрачке нет
+            assert fx <= 0.34 or fx >= 0.66, f"гусиные лапки не у внешнего угла: {z}"
+            assert fy >= 0.36, f"гусиные лапки слишком высоко: {z}"
+        else:
+            assert not any(_in_rect(fx, fy, r) for r in _EXCLUDE), \
+                f"маркер в глазу/рту: {z['metric_id']} face=({fx:.3f},{fy:.3f}) img%=({z['x']:.1f},{z['y']:.1f})"
+        if z["metric_id"] in ("dark_circles", "tired_eyes", "puffiness") or "under_eye" in rid:
             # ниже зрачков synthetic (~y340) и ниже найденных глаз
             assert cy > 355, f"маркер слишком высоко (на уровне глаз): y_px={cy:.0f} {z}"
             side = "left" if z["x"] < 50 else "right"

@@ -1354,7 +1354,7 @@ _EYE_MARKER_OFFSET = {
     "dark_circles": (0.010, 0.000),
     "tired_eyes": (-0.022, 0.008),
     "puffiness": (0.000, 0.012),
-    "wrinkles": (-0.045, 0.004),  # чуть к внешнему углу — «гусиные лапки»
+    "wrinkles": (-0.020, -0.008),  # ближе к нижнему веку
     "dryness": (0.024, 0.006),
     "pigmentation": (-0.030, 0.010),
 }
@@ -1383,9 +1383,6 @@ def _anchor_under_eye(cx, cy, bbox, rid, eyes=None, ftype=None):
         # абсолютная страховка: ниже зоны зрачка (_EXCLUDE до ~0.47), выше щеки
         cy = min(max(cy, y0 + 0.485 * fh), y0 + 0.545 * fh)
         dx = dx_frac * fw if side == "left" else -dx_frac * fw
-        # морщины — чуть наружу (гусиные лапки), мешки/круги — под зрачком
-        if ftype == "wrinkles":
-            dx = (-0.06 * fw) if side == "left" else (0.06 * fw)
         cx = max(x0 + 0.12 * fw, min(x1 - 0.12 * fw, ex + dx))
         return cx, cy
 
@@ -1439,7 +1436,11 @@ _EYE_ALWAYS_PAIRED = ("dark_circles", "tired_eyes", "puffiness")
 def _is_eye_finding(f):
     rid = f.get("region") or ""
     ftype = f.get("type") or ""
-    return ftype in _EYE_ALWAYS_PAIRED or "under_eye" in rid
+    return (
+        ftype in _EYE_ALWAYS_PAIRED
+        or "under_eye" in rid
+        or "crow_feet" in rid
+    )
 
 
 def _pair_eye_findings(grid, bbox, findings, eyes):
@@ -1471,15 +1472,24 @@ def _pair_eye_findings(grid, bbox, findings, eyes):
             continue
         src = max(items, key=lambda f: f.get("confidence", 0) + f.get("strength", 0))
         for side in missing:
-            rid = f"{side}_under_eye"
-            eye = (eyes or {}).get(side) or (0, 0)
-            cx, cy = _anchor_under_eye(
-                eye[0], eye[1], bbox, rid, eyes=eyes, ftype=ftype
-            )
+            if "crow_feet" in (src.get("region") or ""):
+                rid = f"{side}_crow_feet"
+                cx, cy = _anchor_crow_feet(bbox, side, eyes=eyes)
+                rlabel = (
+                    "У внешнего угла глаза слева" if side == "left"
+                    else "У внешнего угла глаза справа"
+                )
+            else:
+                rid = f"{side}_under_eye"
+                eye = (eyes or {}).get(side) or (0, 0)
+                cx, cy = _anchor_under_eye(
+                    eye[0], eye[1], bbox, rid, eyes=eyes, ftype=ftype
+                )
+                rlabel = labels.get(rid, src.get("region_label"))
             clone = {
                 **src,
                 "region": rid,
-                "region_label": labels.get(rid, src.get("region_label")),
+                "region_label": rlabel,
                 "geom": _to_pct(
                     grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2
                 ),
@@ -1502,15 +1512,30 @@ def _sanitize_findings_markers(grid, bbox, findings, eyes=None):
             continue
         rid = f.get("region") or ""
         ftype = f.get("type") or ""
+        is_crow = "crow_feet" in rid
         eye_related = (
             "under_eye" in rid
             or ftype in ("dark_circles", "tired_eyes", "puffiness")
             or (ftype == "wrinkles" and "under_eye" in rid)
-        )
+        ) and not is_crow
         cx = geom["x"] / 100.0 * grid.w
         cy = geom["y"] / 100.0 * grid.h
         fx, fy = _face_frac(cx, cy, bbox)
         forbidden = _geom_hits_forbidden(grid, geom, bbox, eyes=eyes)
+        if is_crow:
+            side = "left" if "left" in rid else "right"
+            cx, cy = _anchor_crow_feet(bbox, side, eyes=eyes)
+            f = {
+                **f,
+                "region": f"{side}_crow_feet",
+                "region_label": (
+                    "У внешнего угла глаза слева" if side == "left"
+                    else "У внешнего угла глаза справа"
+                ),
+                "geom": _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2),
+            }
+            out.append(f)
+            continue
         if eye_related or (forbidden and ftype in ("dark_circles", "tired_eyes", "puffiness")):
             side = rid if "under_eye" in rid else (
                 "left_under_eye" if fx < 0.5 else "right_under_eye"
@@ -2268,19 +2293,58 @@ def _crow_feet_pts(regions, bbox, side):
     for x, y in list(under) + list(cheek):
         fx, fy = _face_frac(x, y, bbox)
         if side == "left":
-            if 0.10 <= fx <= 0.28 and 0.38 <= fy <= 0.56:
+            if 0.08 <= fx <= 0.30 and 0.36 <= fy <= 0.54:
                 pts.append((x, y))
         else:
-            if 0.72 <= fx <= 0.90 and 0.38 <= fy <= 0.56:
+            if 0.70 <= fx <= 0.92 and 0.36 <= fy <= 0.54:
                 pts.append((x, y))
     return pts
 
 
+def _anchor_crow_feet(bbox, side, eyes=None):
+    """Маркер на внешнем углу глаза (гусиные лапки), не на зрачке и не на щеке."""
+    x0, y0, x1, y1 = bbox
+    fw = max(1, x1 - x0)
+    fh = max(1, y1 - y0)
+    eye = (eyes or {}).get(side)
+    if eye:
+        ex, ey = eye[0], eye[1]
+        # к виску от зрачка, чуть ниже внешнего угла
+        cx = ex + (-0.125 * fw if side == "left" else 0.125 * fw)
+        cy = ey + 0.045 * fh
+        cy = min(max(cy, ey + 0.030 * fh), ey + 0.075 * fh)
+        # ниже зоны зрачка (~0.47), выше щеки
+        cy = min(max(cy, y0 + 0.455 * fh), y0 + 0.530 * fh)
+        cx = max(x0 + 0.05 * fw, min(x1 - 0.05 * fw, cx))
+        return cx, cy
+    if side == "left":
+        return x0 + 0.16 * fw, y0 + 0.48 * fh
+    return x0 + 0.84 * fw, y0 + 0.48 * fh
+
+
+def _crow_feet_signal(grid, crow, floor):
+    """Сигнал гусиных лапок: линии у угла могут быть и горизонтальными, и диагональными."""
+    if len(crow) < 10:
+        return False, 0.0, 0.0, 0
+    gx, gy = _mean_grad(grid, crow)
+    peaks = _line_peak_count(grid, crow, "horizontal")
+    peaks_v = _line_peak_count(grid, crow, "vertical")
+    ratio = gy / max(0.5, gx)
+    edge = max(gy, gx * 0.9)
+    hit = (
+        (gy >= max(2.2, floor * 0.70) and ratio >= 1.15)
+        or (edge >= max(2.8, floor * 0.80) and max(gy, gx) >= 3.0)
+        or peaks >= 2
+        or peaks_v >= 2
+        or (gy >= 5.0 and len(crow) >= 16)
+    )
+    return hit, gy, gx, max(peaks, peaks_v)
+
+
 def _detect_wrinkles(grid, bbox, regions, base):
     """
-    Морщины = тонкие направленные линии (лоб / межбровье / вокруг глаз).
-    Мешок — объём; морщины вокруг глаз ловим и под глазом, и у внешнего угла
-    («гусиные лапки»), в т.ч. при прищуре.
+    Морщины = тонкие линии (лоб / межбровье / под глазами / гусиные лапки).
+    Под глазом и у внешнего угла — отдельные маркеры.
     """
     findings = []
     fh_pts = regions.get("forehead") or []
@@ -2305,7 +2369,7 @@ def _detect_wrinkles(grid, bbox, regions, base):
         if direction == "horizontal":
             main, cross = gy_m, gx_m
             evidence = (
-                "мелкие морщины вокруг глаз"
+                "мелкие морщины под глазом"
                 if "under_eye" in rid
                 else "повторяющиеся горизонтальные морщины на лбу"
             )
@@ -2336,76 +2400,99 @@ def _detect_wrinkles(grid, bbox, regions, base):
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
 
+    crow_labels = {
+        "left": "У внешнего угла глаза слева",
+        "right": "У внешнего угла глаза справа",
+    }
+
     for rid, (main, cross, pts, floor, ratio_floor, evidence) in under_raw.items():
         side = "left" if "left" in rid else "right"
         bag = _bag_shelf_score(grid, bbox, pts)
         peaks = _line_peak_count(grid, pts, "horizontal")
         crow = _crow_feet_pts(regions, bbox, side)
-        crow_peaks = _line_peak_count(grid, crow, "horizontal") if len(crow) >= 10 else 0
-        crow_gx, crow_gy = _mean_grad(grid, crow) if len(crow) >= 10 else (0.0, 0.0)
-        crow_ratio = crow_gy / max(0.5, crow_gx)
-
-        # явные гусиные лапки у внешнего угла — приоритетнее полки мешка
-        crow_hit = (
-            len(crow) >= 12
-            and crow_gy >= max(2.6, floor * 0.85)
-            and crow_ratio >= 1.35
-        ) or crow_peaks >= 2
+        crow_hit, crow_gy, crow_gx, crow_peaks = _crow_feet_signal(grid, crow, floor)
 
         line_hit = peaks >= 2 or (peaks >= 1 and main >= floor and main >= cross * ratio_floor)
-        # сильный направленный сигнал при прищуре (даже если пики на грубой сетке слились)
         squint_hit = main >= floor and main >= cross * ratio_floor and main >= 3.2
 
-        # чистый мешок без линий — не морщины
-        if bag >= 0.50 and not crow_hit and not line_hit and peaks == 0 and not (
-            squint_hit and main >= cross * 1.7
-        ):
-            continue
-        if not (crow_hit or line_hit or squint_hit):
-            continue
+        # 1) отдельный маркер гусиных лапок
+        if crow_hit:
+            cx, cy = _anchor_crow_feet(bbox, side, eyes=None)
+            # уточним по самым сильным пикселям угла, но не уводим на щёку
+            if len(crow) >= 10:
+                strong = sorted(
+                    ((max(grid.grad(x, y)), x, y) for x, y in crow), reverse=True
+                )[: max(5, len(crow) // 10)]
+                sx = sum(s[1] for s in strong) / len(strong)
+                sy = sum(s[2] for s in strong) / len(strong)
+                # смесь: 55% анатомический угол, 45% сигнал
+                ax, ay = _anchor_crow_feet(bbox, side, eyes=None)
+                cx = 0.55 * ax + 0.45 * sx
+                cy = 0.55 * ay + 0.45 * sy
+                # не ниже подглазья и не на зрачке
+                x0, y0, x1, y1 = bbox
+                fh = max(1, y1 - y0)
+                cy = min(max(cy, y0 + 0.40 * fh), y0 + 0.52 * fh)
+            findings.append({
+                "type": "wrinkles",
+                "region": f"{side}_crow_feet",
+                "region_label": crow_labels[side],
+                "strength": min(1.0, 0.40 + crow_gy / 14.0 + crow_peaks * 0.08),
+                "confidence": round(min(0.90, 0.58 + crow_gy / 20.0 + crow_peaks * 0.05), 2),
+                "evidence": "мелкие морщины у внешнего угла глаза (гусиные лапки)",
+                "geom": _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2),
+                "_line_peaks": crow_peaks,
+                "_bag_score": 0.0,
+                "_crow": True,
+            })
 
-        # якорь: гусиные лапки → внешний угол; иначе центр подглазья
-        if crow_hit and len(crow) >= 10:
-            pts_pref = crow
-            evidence = "мелкие морщины у внешнего угла глаза"
-        elif "left" in rid:
-            pts_pref = [
-                p for p in pts
-                if 0.18 <= _face_frac(p[0], p[1], bbox)[0] <= 0.32
-            ] or pts
-        else:
-            pts_pref = [
-                p for p in pts
-                if 0.68 <= _face_frac(p[0], p[1], bbox)[0] <= 0.82
-            ] or pts
-        strong = sorted(
-            ((grid.grad(x, y)[1], x, y) for x, y in pts_pref),
-            reverse=True,
-        )[: max(6, len(pts_pref) // 8)]
-        cx = sum(s[1] for s in strong) / len(strong)
-        cy = sum(s[2] for s in strong) / len(strong)
-        cx, cy = _anchor_under_eye(cx, cy, bbox, rid, ftype="wrinkles")
-        bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
-        bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
-        rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
-        strength = min(
-            1.0,
-            (main - floor) / 6.0
-            + max(0.0, main / max(0.5, cross) - ratio_floor) * 0.45
-            + (0.15 if crow_hit else 0.0),
-        )
-        conf = min(0.90, 0.50 + (main - floor) / 14.0 + max(peaks, crow_peaks) * 0.05 + (0.08 if crow_hit else 0.0))
+        # 2) маркер под глазом — только если есть линии/прищур, не чистый мешок
+        under_ok = line_hit or squint_hit
+        if bag >= 0.55 and peaks == 0 and not squint_hit:
+            under_ok = False
+        if under_ok:
+            strong = sorted(
+                ((grid.grad(x, y)[1], x, y) for x, y in pts), reverse=True
+            )[: max(6, len(pts) // 8)]
+            cx = sum(s[1] for s in strong) / len(strong)
+            cy = sum(s[2] for s in strong) / len(strong)
+            cx, cy = _anchor_under_eye(cx, cy, bbox, rid, ftype="wrinkles")
+            bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
+            bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
+            rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
+            strength = min(1.0, (main - floor) / 6.0 + max(0.0, main / max(0.5, cross) - ratio_floor) * 0.45)
+            conf = min(0.88, 0.50 + (main - floor) / 14.0 + peaks * 0.05)
+            findings.append({
+                "type": "wrinkles", "region": rid, "region_label": rlabel,
+                "strength": strength, "confidence": round(conf, 2),
+                "evidence": evidence,
+                "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+                "_line_peaks": peaks,
+                "_bag_score": round(bag, 3),
+                "_crow": False,
+            })
+
+    # парность crow_feet: если одна сторона есть — зеркалим угол
+    crow_found = [f for f in findings if f.get("region", "").endswith("crow_feet")]
+    if len(crow_found) == 1:
+        src = crow_found[0]
+        side = "left" if "left" in src["region"] else "right"
+        other = "right" if side == "left" else "left"
+        cx, cy = _anchor_crow_feet(bbox, other, eyes=None)
         findings.append({
-            "type": "wrinkles", "region": rid, "region_label": rlabel,
-            "strength": strength, "confidence": round(conf, 2),
-            "evidence": evidence,
-            "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
-            "_line_peaks": max(peaks, crow_peaks),
-            "_bag_score": round(bag, 3),
-            "_crow": crow_hit,
+            "type": "wrinkles",
+            "region": f"{other}_crow_feet",
+            "region_label": crow_labels[other],
+            "strength": max(0.32, src["strength"] * 0.8),
+            "confidence": round(min(0.82, src["confidence"] * 0.9), 2),
+            "evidence": "мелкие морщины у внешнего угла глаза (гусиные лапки)",
+            "geom": _to_pct(grid, cx, cy, int(cx) - 2, int(cy) - 2, int(cx) + 2, int(cy) + 2),
+            "_crow": True,
+            "_line_peaks": src.get("_line_peaks", 1),
+            "_bag_score": 0.0,
         })
 
-    under_findings = [f for f in findings if "under_eye" in f["region"]]
+    under_findings = [f for f in findings if f.get("region", "").endswith("under_eye")]
     if len(under_findings) == 1:
         found = under_findings[0]
         other = "left_under_eye" if found["region"] == "right_under_eye" else "right_under_eye"
@@ -2413,18 +2500,12 @@ def _detect_wrinkles(grid, bbox, regions, base):
             main, cross, pts, floor, ratio_floor, evidence = under_raw[other]
             bag = _bag_shelf_score(grid, bbox, pts)
             peaks = _line_peak_count(grid, pts, "horizontal")
-            side = "left" if "left" in other else "right"
-            crow = _crow_feet_pts(regions, bbox, side)
-            crow_gx, crow_gy = _mean_grad(grid, crow) if len(crow) >= 10 else (0.0, 0.0)
-            crow_hit = len(crow) >= 12 and crow_gy >= max(2.4, floor * 0.8) and crow_gy >= crow_gx * 1.3
-            if (
-                (crow_hit or peaks >= 1 or (main >= floor * 0.85 and main >= cross * ratio_floor * 0.9))
-                and not (bag >= 0.55 and peaks == 0 and not crow_hit)
+            if not (bag >= 0.55 and peaks == 0) and (
+                peaks >= 1 or (main >= floor * 0.85 and main >= cross * ratio_floor * 0.9)
             ):
-                use_pts = crow if crow_hit and len(crow) >= 10 else pts
                 strong = sorted(
-                    ((grid.grad(x, y)[1], x, y) for x, y in use_pts), reverse=True
-                )[: max(6, len(use_pts) // 8)]
+                    ((grid.grad(x, y)[1], x, y) for x, y in pts), reverse=True
+                )[: max(6, len(pts) // 8)]
                 cx = sum(s[1] for s in strong) / len(strong)
                 cy = sum(s[2] for s in strong) / len(strong)
                 cx, cy = _anchor_under_eye(cx, cy, bbox, other, ftype="wrinkles")
@@ -2435,7 +2516,7 @@ def _detect_wrinkles(grid, bbox, regions, base):
                     "type": "wrinkles", "region": other, "region_label": rlabel,
                     "strength": max(0.3, found["strength"] * 0.75),
                     "confidence": round(min(0.82, found["confidence"] * 0.90), 2),
-                    "evidence": "мелкие морщины вокруг глаз",
+                    "evidence": evidence,
                     "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
                 })
     return findings

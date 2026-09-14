@@ -551,7 +551,7 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
     features = []
     zones = []
     for ftype, items in per_type.items():
-        # до 3 маркеров одного типа (несколько участков), тег при этом один
+        # до 3 маркеров одного типа; для морщин — до 4 (под глазом + гусиные лапки)
         items = sorted(
             items,
             key=lambda f: (f["confidence"] + f.get("strength", 0), f["confidence"]),
@@ -559,18 +559,25 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         )
         picked = []
         seen_side = set()
+        max_pick = 4 if ftype == "wrinkles" else 3
         for f in items:
             rid = f.get("region") or ""
-            side = (
-                "L" if "left" in rid else
-                "R" if "right" in rid else
-                rid or f"z{len(picked)}"
-            )
+            # морщины: подглазье и внешний угол — разные маркеры на одной стороне лица
+            if ftype == "wrinkles" and "crow_feet" in rid:
+                side = "Lc" if "left" in rid else "Rc"
+            elif ftype == "wrinkles" and "under_eye" in rid:
+                side = "Lu" if "left" in rid else "Ru"
+            else:
+                side = (
+                    "L" if "left" in rid else
+                    "R" if "right" in rid else
+                    rid or f"z{len(picked)}"
+                )
             if side in seen_side:
                 continue
             picked.append(f)
             seen_side.add(side)
-            if len(picked) >= 3:
+            if len(picked) >= max_pick:
                 break
         if not picked:
             continue
