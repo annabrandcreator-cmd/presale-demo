@@ -378,7 +378,7 @@ def t_eye_markers_under_not_on_pupils():
             side = "left" if z["x"] < 50 else "right"
             if side in eyes:
                 # глаза в сетке → в % исходного кадра
-                ex, ey = eyes[side]
+                ex, ey = eyes[side][0], eyes[side][1]
                 eye_y_pct = 100.0 * ey / gh
                 assert z["y"] > eye_y_pct + 2.5, \
                     f"маркер не ниже зрачка: zone_y={z['y']} eye_y={eye_y_pct:.1f} {z}"
@@ -404,6 +404,60 @@ def t_both_eyes_markers():
     xs = sorted(z["x"] for z in tired)
     assert xs[0] < 50 < xs[-1], f"усталость: оба глаза: {xs}"
 results.append(run("тёмные круги/усталость — по маркеру на каждый глаз", t_both_eyes_markers))
+
+# 14. Густые брови ≠ глаза (загруженные фото: маркер уезжал на зрачок)
+def t_brows_not_mistaken_for_eyes():
+    from cosmetic_vision import _decode, _Grid, _detect_face_haar, _find_eye_centers
+    img = base_face()
+    d = ImageDraw.Draw(img)
+    # брови заметно темнее и массивнее глаз — как на реальных селфи
+    d.rectangle([200, 282, 305, 308], fill=(38, 26, 20))
+    d.rectangle([335, 282, 440, 308], fill=(38, 26, 20))
+    d.ellipse([210, 365, 300, 415], fill=(135, 100, 85))
+    d.ellipse([340, 365, 430, 415], fill=(135, 100, 85))
+    data = to_bytes(img)
+    _img2, px, gw, gh = _decode(data)
+    face = _detect_face_haar(_img2)
+    assert face, "лицо не найдено"
+    gb = (
+        max(0, int(face[0] * gw)), max(0, int(face[1] * gh)),
+        min(gw - 1, int(face[2] * gw)), min(gh - 1, int(face[3] * gh)),
+    )
+    eyes = _find_eye_centers(_Grid(px, gw, gh), gb, source_img=_img2)
+    for side, eye in eyes.items():
+        eye_y_px = eye[1] / gh * H
+        assert eye_y_px > 315, \
+            f"{side}: центр глаза уехал на бровь (y={eye_y_px:.0f}px, бровь ~297px)"
+    scan = cosmetic_engine.analyze_skin_photo(data)
+    for z in scan["zones"]:
+        if "under_eye" not in (z.get("region") or ""):
+            continue
+        y_px = z["y"] / 100.0 * H
+        assert y_px > 370, f"маркер на глазу: {z['metric_id']} y={y_px:.0f}px"
+results.append(run("густые брови ≠ глаза; маркеры остаются под глазами", t_brows_not_mistaken_for_eyes))
+
+# 15. Все глазные признаки — строго по два маркера, слева и справа
+def t_eye_features_always_symmetric():
+    img = base_face()
+    d = ImageDraw.Draw(img)
+    # тени только под одним глазом — вторую сторону достраиваем зеркально
+    d.ellipse([210, 365, 300, 415], fill=(120, 88, 76))
+    for y in (372, 380, 388):
+        d.line([(220, y), (290, y)], fill=(112, 82, 70), width=1)
+    scan = cosmetic_engine.analyze_skin_photo(to_bytes(img))
+    per_type = {}
+    for z in scan["zones"]:
+        if z["metric_id"] in ("dark_circles", "tired_eyes", "puffiness") \
+                or "under_eye" in (z.get("region") or ""):
+            per_type.setdefault(z["metric_id"], []).append(z)
+    assert per_type, "глазные признаки не найдены"
+    for ftype, zs in per_type.items():
+        sides = {"left" if "left" in (z.get("region") or "") else "right" for z in zs}
+        assert sides == {"left", "right"}, f"{ftype}: маркеры только с одной стороны ({zs})"
+        # разные признаки не должны лежать точка в точку
+        ys = sorted(z["y"] for z in zs)
+        assert abs(ys[0] - ys[-1]) < 3.0, f"{ftype}: стороны на разной высоте {ys}"
+results.append(run("глазные признаки — всегда симметричная пара", t_eye_features_always_symmetric))
 
 print()
 print(f"{sum(results)}/{len(results)} проверок пройдено")
