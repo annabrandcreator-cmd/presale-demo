@@ -494,6 +494,17 @@ def t_bags_not_wrinkles():
     assert len(puff) >= 2, f"мешки должны быть на оба глаза: {puff}"
 results.append(run("мешки под глазами ≠ мелкие морщины", t_bags_not_wrinkles))
 
+# 17. Не выдумывать морщины у угла глаз на ровной коже
+def t_no_invented_eye_wrinkles():
+    scan = cosmetic_engine.analyze_skin_photo(to_bytes(base_face()))
+    wr = [z for z in scan["zones"] if z["metric_id"] == "wrinkles"]
+    crow = [z for z in wr if "crow" in (z.get("region") or "")]
+    under = [z for z in wr if "under_eye" in (z.get("region") or "")]
+    assert not crow, f"ложные гусиные лапки на чистом лице: {crow}"
+    assert not under, f"ложные морщины под глазами на чистом лице: {under}"
+results.append(run("не выдумывать морщины вокруг глаз на ровной коже", t_no_invented_eye_wrinkles))
+
+
 
 print()
 print(f"{sum(results)}/{len(results)} проверок пройдено")
