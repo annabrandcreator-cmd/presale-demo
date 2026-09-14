@@ -63,7 +63,7 @@ FEATURE_LABELS = {
     "dryness": "Признаки сухости",
     "dullness": "Тусклость тона",
     "uneven_texture": "Неровность текстуры",
-    "puffiness": "Отёчность вокруг глаз",
+    "puffiness": "Мешки под глазами",
     "tired_eyes": "Признаки усталости взгляда",
 }
 
@@ -2011,50 +2011,143 @@ def _detect_dryness(grid, bbox, regions, base):
     return findings[:1]
 
 
+
+def _under_eye_band(pts, bbox, y0=0.49, y1=0.58):
+    band = [
+        p for p in pts
+        if y0 <= _face_frac(p[0], p[1], bbox)[1] <= y1
+        and not any(_in_rect(*_face_frac(p[0], p[1], bbox), r) for r in _EXCLUDE)
+    ]
+    return band or pts
+
+
+def _mean_luma(grid, pts):
+    if not pts:
+        return 0.0
+    return sum(grid.luma[y * grid.w + x] for x, y in pts) / len(pts)
+
+
+def _mean_lap(grid, pts):
+    if not pts:
+        return 0.0
+    return sum(grid.lap(x, y) for x, y in pts) / len(pts)
+
+
+def _mean_grad(grid, pts):
+    if not pts:
+        return 0.0, 0.0
+    gx = gy = 0.0
+    for x, y in pts:
+        a, b = grid.grad(x, y)
+        gx += a
+        gy += b
+    n = len(pts)
+    return gx / n, gy / n
+
+
+def _line_peak_count(grid, pts, direction="horizontal"):
+    """Сколько отдельных тонких пиков градиента — морщины, а не один контур мешка."""
+    if len(pts) < 12:
+        return 0
+    buckets = {}
+    for x, y in pts:
+        key = y if direction == "horizontal" else x
+        g = grid.grad(x, y)
+        val = g[1] if direction == "horizontal" else g[0]
+        buckets.setdefault(key, []).append(val)
+    rows = sorted((k, sum(v) / len(v)) for k, v in buckets.items())
+    if len(rows) < 4:
+        return 0
+    vals = [v for _, v in rows]
+    med = sorted(vals)[len(vals) // 2]
+    floor = med * 1.35 + 1.2
+    peaks = 0
+    for i in range(1, len(vals) - 1):
+        if vals[i] >= floor and vals[i] >= vals[i - 1] and vals[i] >= vals[i + 1]:
+            if vals[i] >= max(vals[i - 1], vals[i + 1]) * 1.12:
+                peaks += 1
+    return peaks
+
+
+def _bag_shelf_score(grid, bbox, under_pts):
+    """
+    Мешок: мягкая «полка» — верх/низ подглазья различаются по яркости,
+    внизу один широкий горизонтальный контур, не сетка тонких линий.
+    """
+    if len(under_pts) < 14:
+        return 0.0
+    upper = _under_eye_band(under_pts, bbox, 0.48, 0.53)
+    lower = _under_eye_band(under_pts, bbox, 0.53, 0.59)
+    if len(upper) < 6 or len(lower) < 6:
+        return 0.0
+    u_l = _mean_luma(grid, upper)
+    l_l = _mean_luma(grid, lower)
+    shelf_d = abs(u_l - l_l)
+    _gx_l, gy_l = _mean_grad(grid, lower)
+    _gx_u, gy_u = _mean_grad(grid, upper)
+    shelf_edge = max(0.0, gy_l - gy_u)
+    peaks = _line_peak_count(grid, under_pts, "horizontal")
+    if peaks >= 3:
+        return 0.0
+    score = 0.0
+    if shelf_d >= 6:
+        score += min(0.45, shelf_d / 28.0)
+    if shelf_edge >= 1.2:
+        score += min(0.40, shelf_edge / 8.0)
+    if peaks <= 1:
+        score += 0.18
+    elif peaks == 2:
+        score += 0.05
+    return min(1.0, score)
+
+
 def _detect_puffiness(grid, bbox, regions, base):
-    """Отёчность под глазами: зона светлее/ровнее соседней щеки, без тёмных кругов."""
+    """
+    Мешки/отёчность под глазами: объёмная «полка», а не тонкие морщины.
+    Ловим и светлый холмик, и классическую тень под объёмом.
+    """
     findings = []
     pairs = (
         ("left_under_eye", "left_cheek"),
         ("right_under_eye", "right_cheek"),
     )
     for under_id, cheek_id in pairs:
-        under = regions.get(under_id) or []
+        under = _under_eye_band(regions.get(under_id) or [], bbox)
         cheek = regions.get(cheek_id) or []
         if len(under) < 14 or len(cheek) < 30:
             continue
-        under = [p for p in under if 0.49 <= _face_frac(p[0], p[1], bbox)[1] <= 0.58] or under
-        if len(under) < 10:
-            continue
-        u_luma = sum(grid.luma[y * grid.w + x] for x, y in under) / len(under)
-        c_luma = sum(grid.luma[y * grid.w + x] for x, y in cheek) / len(cheek)
-        u_tex = sum(grid.lap(x, y) for x, y in under) / len(under)
-        c_tex = sum(grid.lap(x, y) for x, y in cheek) / len(cheek)
-        # отёк: под глазом светлее щеки и чуть ровнее по текстуре
-        if u_luma < c_luma + 6:
-            continue
-        if u_tex > c_tex * 1.15:
+        u_luma = _mean_luma(grid, under)
+        c_luma = _mean_luma(grid, cheek)
+        u_tex = _mean_lap(grid, under)
+        c_tex = _mean_lap(grid, cheek)
+        bag = _bag_shelf_score(grid, bbox, under)
+        bright_mound = u_luma >= c_luma + 5 and u_tex <= c_tex * 1.20
+        shadowed_bag = bag >= 0.42 and u_luma <= c_luma + 2
+        if not (bright_mound or shadowed_bag):
             continue
         dark_frac = sum(
             1 for x, y in under if base["luma"] - grid.luma[y * grid.w + x] > 18
         ) / len(under)
-        if dark_frac > 0.28:
-            continue  # это скорее тёмные круги
+        if dark_frac > 0.55 and bag < 0.50 and not bright_mound:
+            continue
+        if _line_peak_count(grid, under, "horizontal") >= 3 and bag < 0.55:
+            continue
         cx = sum(p[0] for p in under) / len(under)
         cy = sum(p[1] for p in under) / len(under)
-        cx, cy = _anchor_under_eye(cx, cy, bbox, under_id)
+        cx, cy = _anchor_under_eye(cx, cy, bbox, under_id, ftype="puffiness")
         bx0, by0 = min(p[0] for p in under), min(p[1] for p in under)
         bx1, by1 = max(p[0] for p in under), max(p[1] for p in under)
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[under_id]
-        strength = min(1.0, (u_luma - c_luma) / 22.0 + 0.25)
-        conf = min(0.84, 0.50 + (u_luma - c_luma) / 40.0)
+        strength = min(1.0, 0.35 + bag * 0.55 + max(0.0, (u_luma - c_luma) / 28.0))
+        conf = min(0.88, 0.52 + bag * 0.30 + (0.08 if bright_mound else 0.0))
         if conf < CONF_FLOOR:
             continue
         findings.append({
             "type": "puffiness", "region": under_id, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
-            "evidence": "область под глазом выглядит более объёмной и светлой относительно щеки",
+            "evidence": "объёмная складка/мешок под глазом (мягкая полка, не тонкая морщина)",
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+            "_bag_score": round(bag, 3),
         })
     return findings[:2]
 
@@ -2166,13 +2259,17 @@ def _detect_tired_eyes(findings):
 
 
 def _detect_wrinkles(grid, bbox, regions, base):
-    """Линии лба, межбровья и под глазами по направленным градиентам."""
+    """
+    Морщины = тонкие направленные линии (лоб / межбровье / вокруг глаз).
+    Мешок под глазом — объём, не морщина: подглазные морщины только при
+    нескольких тонких параллельных складках, а не одном мягком контуре.
+    """
     findings = []
     fh_pts = regions.get("forehead") or []
     fh_gy = (
         sum(grid.grad(x, y)[1] for x, y in fh_pts) / len(fh_pts) if len(fh_pts) > 30 else 2.0
     )
-    under_floor = max(2.2, fh_gy * 1.55)
+    under_floor = max(3.4, fh_gy * 1.85)
     checks = [
         ("forehead", "horizontal", 4.2),
         ("glabella", "vertical", 4.2),
@@ -2184,31 +2281,20 @@ def _detect_wrinkles(grid, bbox, regions, base):
         pts = regions.get(rid) or []
         if len(pts) < 28:
             continue
-        # под глазом — середина зоны (не веко/зрачок)
         if "under_eye" in rid:
-            pts = [
-                p for p in pts
-                if 0.49 <= _face_frac(p[0], p[1], bbox)[1] <= 0.58
-                and not any(_in_rect(*_face_frac(p[0], p[1], bbox), r) for r in _EXCLUDE)
-            ] or pts
-        gx_sum = gy_sum = 0.0
-        for x, y in pts:
-            gx, gy = grid.grad(x, y)
-            gx_sum += gx
-            gy_sum += gy
-        gx_m = gx_sum / len(pts)
-        gy_m = gy_sum / len(pts)
+            pts = _under_eye_band(pts, bbox)
+        gx_m, gy_m = _mean_grad(grid, pts)
         if direction == "horizontal":
             main, cross = gy_m, gx_m
             evidence = (
-                "мелкие горизонтальные морщины под глазом"
+                "мелкие горизонтальные морщины вокруг глаз"
                 if "under_eye" in rid
                 else "повторяющиеся горизонтальные морщины на лбу"
             )
         else:
             main, cross = gx_m, gy_m
             evidence = "вертикальные морщины в межбровной зоне"
-        ratio_floor = 1.05 if "under_eye" in rid else 1.6
+        ratio_floor = 1.75 if "under_eye" in rid else 1.6
         if "under_eye" in rid:
             under_raw[rid] = (main, cross, pts, floor, ratio_floor, evidence)
             continue
@@ -2232,28 +2318,24 @@ def _detect_wrinkles(grid, bbox, regions, base):
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
         })
 
-    # парные морщинки под глазами: одна сильная сторона «открывает» вторую
-    x0, y0, x1, y1 = bbox
-    fh = max(1, y1 - y0)
-    strong_under = any(
-        main >= floor and main >= cross * ratio_floor
-        for main, cross, _, floor, ratio_floor, _ in under_raw.values()
-    )
     for rid, (main, cross, pts, floor, ratio_floor, evidence) in under_raw.items():
-        soft_floor = floor * (0.78 if strong_under else 1.0)
-        soft_ratio = ratio_floor * (0.90 if strong_under else 1.0)
-        if main < soft_floor or main < cross * soft_ratio:
+        bag = _bag_shelf_score(grid, bbox, pts)
+        peaks = _line_peak_count(grid, pts, "horizontal")
+        if bag >= 0.40 and peaks < 3:
             continue
-        # предпочитаем центральную/медиальную треть под глазом, не внешний угол
+        if peaks < 2:
+            continue
+        if main < floor or main < cross * ratio_floor:
+            continue
         if "left" in rid:
             pts_pref = [
                 p for p in pts
-                if 0.24 <= _face_frac(p[0], p[1], bbox)[0] <= 0.36
+                if 0.18 <= _face_frac(p[0], p[1], bbox)[0] <= 0.30
             ] or pts
         else:
             pts_pref = [
                 p for p in pts
-                if 0.64 <= _face_frac(p[0], p[1], bbox)[0] <= 0.76
+                if 0.70 <= _face_frac(p[0], p[1], bbox)[0] <= 0.82
             ] or pts
         strong = sorted(
             ((grid.grad(x, y)[1], x, y) for x, y in pts_pref),
@@ -2261,31 +2343,41 @@ def _detect_wrinkles(grid, bbox, regions, base):
         )[: max(6, len(pts_pref) // 8)]
         cx = sum(s[1] for s in strong) / len(strong)
         cy = sum(s[2] for s in strong) / len(strong)
-        cx, cy = _anchor_under_eye(cx, cy, bbox, rid)
+        cx, cy = _anchor_under_eye(cx, cy, bbox, rid, ftype="wrinkles")
         bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
         bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
-        strength = min(1.0, (main - soft_floor) / 6.0 + max(0.0, main / max(0.5, cross) - soft_ratio) * 0.5)
-        conf = min(0.9, 0.54 + (main - soft_floor) / 12.0 + (main / max(0.5, cross) - soft_ratio) * 0.3)
+        strength = min(1.0, (main - floor) / 6.0 + max(0.0, main / max(0.5, cross) - ratio_floor) * 0.5)
+        conf = min(0.88, 0.50 + (main - floor) / 14.0 + peaks * 0.06)
         findings.append({
             "type": "wrinkles", "region": rid, "region_label": rlabel,
             "strength": strength, "confidence": round(conf, 2),
             "evidence": evidence,
             "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
+            "_line_peaks": peaks,
+            "_bag_score": round(bag, 3),
         })
+
     under_findings = [f for f in findings if "under_eye" in f["region"]]
     if len(under_findings) == 1:
         found = under_findings[0]
         other = "left_under_eye" if found["region"] == "right_under_eye" else "right_under_eye"
         if other in under_raw:
             main, cross, pts, floor, ratio_floor, evidence = under_raw[other]
-            if len(pts) >= 16:
+            bag = _bag_shelf_score(grid, bbox, pts)
+            peaks = _line_peak_count(grid, pts, "horizontal")
+            if (
+                bag < 0.40
+                and peaks >= 2
+                and main >= floor * 0.85
+                and main >= cross * ratio_floor * 0.9
+            ):
                 strong = sorted(
                     ((grid.grad(x, y)[1], x, y) for x, y in pts), reverse=True
                 )[: max(6, len(pts) // 8)]
                 cx = sum(s[1] for s in strong) / len(strong)
                 cy = sum(s[2] for s in strong) / len(strong)
-                cx, cy = _anchor_under_eye(cx, cy, bbox, other)
+                cx, cy = _anchor_under_eye(cx, cy, bbox, other, ftype="wrinkles")
                 bx0, by0 = min(s[1] for s in strong), min(s[2] for s in strong)
                 bx1, by1 = max(s[1] for s in strong), max(s[2] for s in strong)
                 rlabel = dict((r[0], r[1]) for r in _REGIONS)[other]
@@ -2296,25 +2388,30 @@ def _detect_wrinkles(grid, bbox, regions, base):
                     "evidence": evidence,
                     "geom": _to_pct(grid, cx, cy, bx0, by0, bx1, by1),
                 })
-        else:
-            # геометрическое зеркало, если зона пуста
-            g = found["geom"]
-            fw = max(1, x1 - x0)
-            cx0 = g["x"] / 100.0 * grid.w
-            cy0 = g["y"] / 100.0 * grid.h
-            fx, fy = _face_frac(cx0, cy0, bbox)
-            cx = x0 + (1.0 - fx) * fw
-            cy = y0 + fy * fh
-            cx, cy = _anchor_under_eye(cx, cy, bbox, other)
-            rlabel = dict((r[0], r[1]) for r in _REGIONS)[other]
-            findings.append({
-                "type": "wrinkles", "region": other, "region_label": rlabel,
-                "strength": max(0.3, found["strength"] * 0.7),
-                "confidence": round(min(0.78, found["confidence"] * 0.85), 2),
-                "evidence": "мелкие горизонтальные морщины под глазом",
-                "geom": _to_pct(grid, cx, cy, int(cx), int(cy), int(cx), int(cy)),
-            })
     return findings
+
+
+def _resolve_bags_vs_wrinkles(findings):
+    """Если в зоне под глазом есть мешок — не показываем его как «мелкие морщины»."""
+    puff_sides = {
+        ("left" if "left" in f.get("region", "") else "right")
+        for f in findings if f.get("type") == "puffiness"
+    }
+    out = []
+    for f in findings:
+        if f.get("type") == "wrinkles" and "under_eye" in f.get("region", ""):
+            side = "left" if "left" in f["region"] else "right"
+            if side in puff_sides:
+                continue
+            if f.get("_bag_score", 0) >= 0.40 and f.get("_line_peaks", 0) < 3:
+                out.append({
+                    **{k: v for k, v in f.items() if not k.startswith("_")},
+                    "type": "puffiness",
+                    "evidence": "объёмная складка/мешок под глазом (мягкая полка, не тонкая морщина)",
+                })
+                continue
+        out.append({k: v for k, v in f.items() if not k.startswith("_")})
+    return out
 
 
 # ── Сборка результата ────────────────────────────────────────────────────────
@@ -2422,6 +2519,7 @@ def analyze(image_bytes):
     raw += _detect_dullness(grid, bbox, regions, base)
 
     merged = _merge_findings(raw)
+    merged = _resolve_bags_vs_wrinkles(merged)
     merged = _drop_hairline_false_pores(merged, bbox)
     merged = _sanitize_findings_markers(grid, bbox, merged, eyes=eyes)
     # Сосудистая краснота уже описывает щёки — не дублируем её ещё и

@@ -459,6 +459,36 @@ def t_eye_features_always_symmetric():
         assert abs(ys[0] - ys[-1]) < 3.0, f"{ftype}: стороны на разной высоте {ys}"
 results.append(run("глазные признаки — всегда симметричная пара", t_eye_features_always_symmetric))
 
+# 16. Мешок под глазами ≠ мелкие морщины
+def t_bags_not_wrinkles():
+    """Мягкая объёмная полка под глазами должна стать puffiness, не wrinkles."""
+    img = base_face()
+    px = img.load()
+    # объёмный мешок: плавный градиент (светлый холмик → тень полки), без тонких линий
+    for side_x0, side_x1 in ((205, 300), (340, 435)):
+        for y in range(360, 425):
+            for x in range(side_x0, side_x1):
+                r, g, b = px[x, y]
+                t = (y - 360) / 65.0
+                n = int(18 * (1 - t) - 35 * t)
+                px[x, y] = (
+                    max(0, min(255, r + n)),
+                    max(0, min(255, g + n - 2)),
+                    max(0, min(255, b + n - 4)),
+                )
+    scan = cosmetic_engine.analyze_skin_photo(to_bytes(img))
+    ids = {f["id"] for f in scan["features"]}
+    wr_under = [
+        z for z in scan["zones"]
+        if z["metric_id"] == "wrinkles" and "under_eye" in (z.get("region") or "")
+    ]
+    puff = [z for z in scan["zones"] if z["metric_id"] == "puffiness"]
+    assert "puffiness" in ids or len(puff) >= 1, f"мешок не найден: features={ids} zones={scan['zones']}"
+    assert not wr_under, f"мешок ошибочно помечен как морщины: {wr_under}"
+    assert len(puff) >= 2, f"мешки должны быть на оба глаза: {puff}"
+results.append(run("мешки под глазами ≠ мелкие морщины", t_bags_not_wrinkles))
+
+
 print()
 print(f"{sum(results)}/{len(results)} проверок пройдено")
 raise SystemExit(0 if all(results) else 1)
