@@ -518,7 +518,7 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
     """
     Анализ фото: качество → сегментация лица → поиск видимых признаков →
     уверенность и выраженность → маркер в центре найденной области.
-    Не медицинская диагностика; фото не сохраняется.
+    Не медицинская диагностика.
     """
     from cosmetic_vision import analyze as vision_analyze, PhotoQualityError
 
@@ -631,7 +631,7 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
     return {
         "ok": True,
         "mode": "vision",
-        "disclaimer": "Демо-анализ по фото. Не заменяет консультацию косметолога или врача. Фото не сохраняется.",
+        "disclaimer": "Демо-анализ по фото. Не заменяет консультацию косметолога или врача.",
         "headline": headline,
         "priority_concern": priority,
         "suggested_skin_type": skin_guess,

@@ -369,6 +369,27 @@ def t_eye_markers_under_not_on_pupils():
             assert cy > 355, f"маркер слишком высоко (на уровне глаз): y_px={cy:.0f} {z}"
 results.append(run("глазные маркеры — под глазами, не на зрачках", t_eye_markers_under_not_on_pupils))
 
+# 13. Тёмные круги и усталость взгляда — маркеры на ОБОИХ глазах
+def t_both_eyes_markers():
+    random.seed(7)
+    img = base_face()
+    d = ImageDraw.Draw(img)
+    d.ellipse([210, 365, 300, 415], fill=(135, 100, 85))
+    d.ellipse([340, 365, 430, 415], fill=(135, 100, 85))
+    for y in (372, 380, 388):
+        d.line([(220, y), (290, y)], fill=(125, 95, 80), width=1)
+        d.line([(350, y), (420, y)], fill=(125, 95, 80), width=1)
+    scan = cosmetic_engine.analyze_skin_photo(to_bytes(img))
+    dark = [z for z in scan["zones"] if z["metric_id"] == "dark_circles"]
+    assert len(dark) >= 2, f"dark_circles: ожидались маркеры на оба глаза, получили {dark}"
+    xs = sorted(z["x"] for z in dark)
+    assert xs[0] < 50 < xs[-1], f"dark_circles: оба маркера слева и справа: {xs}"
+    tired = [z for z in scan["zones"] if z["metric_id"] == "tired_eyes"]
+    assert len(tired) >= 2, f"усталость: нужен маркер на каждый глаз, получили {tired}"
+    xs = sorted(z["x"] for z in tired)
+    assert xs[0] < 50 < xs[-1], f"усталость: оба глаза: {xs}"
+results.append(run("тёмные круги/усталость — по маркеру на каждый глаз", t_both_eyes_markers))
+
 print()
 print(f"{sum(results)}/{len(results)} проверок пройдено")
 raise SystemExit(0 if all(results) else 1)

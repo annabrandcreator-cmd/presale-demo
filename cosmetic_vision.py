@@ -1251,7 +1251,7 @@ def _detect_dark_circles(grid, bbox, regions, base):
         pts = regions.get(other) or []
         pts = [
             p for p in pts
-            if 0.57 <= _face_frac(p[0], p[1], bbox)[1] <= 0.67
+            if 0.49 <= _face_frac(p[0], p[1], bbox)[1] <= 0.59
         ] or list(pts)
         if len(pts) >= 8:
             ranked = sorted(
@@ -1727,7 +1727,9 @@ def _detect_dullness(grid, bbox, regions, base, metrics_radiance_hint=None):
 
 
 def _detect_tired_eyes(findings):
-    """Признаки усталости взгляда: тёмные круги и/или мелкие морщины под глазами."""
+    """Признаки усталости взгляда: тёмные круги и/или мелкие морщины под глазами.
+    Всегда два маркера — под каждым глазом.
+    """
     under_wrinkles = [
         f for f in findings
         if f["type"] == "wrinkles" and "under_eye" in f.get("region", "")
@@ -1737,19 +1739,56 @@ def _detect_tired_eyes(findings):
     if not (dark or under_wrinkles or puff):
         return []
     if not ((dark and under_wrinkles) or (dark and puff) or (len(dark) >= 2 and dark[0]["strength"] >= 0.45)):
-        # достаточно сильных тёмных кругов в паре
         if not (len(dark) >= 2 and max(f["strength"] for f in dark) >= 0.55):
             return []
-    src = dark[0] if dark else (under_wrinkles[0] if under_wrinkles else puff[0])
-    return [{
-        "type": "tired_eyes",
-        "region": src["region"],
-        "region_label": src["region_label"],
-        "strength": min(1.0, src["strength"] * 0.9 + 0.1),
-        "confidence": round(min(0.88, src["confidence"] * 0.95), 2),
-        "evidence": "видимые признаки усталости в зоне глаз",
-        "geom": src["geom"],
-    }]
+
+    def _side(rid):
+        if "left" in (rid or ""):
+            return "left"
+        if "right" in (rid or ""):
+            return "right"
+        return None
+
+    by_side = {"left": None, "right": None}
+    for f in list(dark) + list(under_wrinkles) + list(puff):
+        side = _side(f.get("region"))
+        if side and by_side[side] is None:
+            by_side[side] = f
+
+    # если одна сторона — зеркалим геометрию на вторую
+    present = [s for s, f in by_side.items() if f]
+    if len(present) == 1:
+        src = by_side[present[0]]
+        other = "right" if present[0] == "left" else "left"
+        g = dict(src.get("geom") or {})
+        if "x" in g:
+            g = {**g, "x": round(100.0 - float(g["x"]), 2)}
+        other_rid = f"{other}_under_eye"
+        by_side[other] = {
+            **src,
+            "region": other_rid,
+            "region_label": "Под глазом справа" if other == "right" else "Под глазом слева",
+            "geom": g,
+        }
+
+    out = []
+    for side in ("left", "right"):
+        src = by_side.get(side)
+        if not src or not src.get("geom"):
+            continue
+        rid = src.get("region") or f"{side}_under_eye"
+        out.append({
+            "type": "tired_eyes",
+            "region": rid,
+            "region_label": src.get("region_label") or (
+                "Под глазом слева" if side == "left" else "Под глазом справа"
+            ),
+            "strength": min(1.0, src["strength"] * 0.9 + 0.1),
+            "confidence": round(min(0.88, src["confidence"] * 0.95), 2),
+            "evidence": "видимые признаки усталости в зоне глаз",
+            "geom": src["geom"],
+        })
+    return out
 
 
 def _detect_wrinkles(grid, bbox, regions, base):
