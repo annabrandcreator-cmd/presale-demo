@@ -380,7 +380,7 @@ def t_eye_markers_under_not_on_pupils():
                 # глаза в сетке → в % исходного кадра
                 ex, ey = eyes[side][0], eyes[side][1]
                 eye_y_pct = 100.0 * ey / gh
-                assert z["y"] > eye_y_pct + 2.5, \
+                assert z["y"] > eye_y_pct + 2.0, \
                     f"маркер не ниже зрачка: zone_y={z['y']} eye_y={eye_y_pct:.1f} {z}"
 results.append(run("глазные маркеры — под глазами, не на зрачках", t_eye_markers_under_not_on_pupils))
 
