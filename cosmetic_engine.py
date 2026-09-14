@@ -482,10 +482,21 @@ _CONCERN_TIPS = {
 }
 
 
+# Типы с одной клиентской подписью → один тег; маркеров может быть несколько.
+_TYPE_CANON = {
+    "rosacea_like": "redness",
+}
+
+
+def _canon_feature_type(ftype):
+    return _TYPE_CANON.get(ftype, ftype)
+
+
 def _zone_dict(f, i):
+    mid = _canon_feature_type(f["type"])
     return {
-        "id": f"{f['type']}_{i}",
-        "metric_id": f["type"],
+        "id": f"{mid}_{i}",
+        "metric_id": mid,
         "label": f["label"],
         "area": f["region_label"],
         "region": f["region"],
@@ -530,12 +541,17 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
     # маркеров на фото для типа может быть до двух (например, обе щеки).
     per_type = {}
     for f in findings:
-        per_type.setdefault(f["type"], []).append(f)
+        ftype = _canon_feature_type(f["type"])
+        # нормализуем type в самом finding для единого id
+        f = {**f, "type": ftype, "label": f.get("label") or ftype}
+        if ftype == "redness":
+            f["label"] = "Покраснение"
+        per_type.setdefault(ftype, []).append(f)
 
     features = []
     zones = []
     for ftype, items in per_type.items():
-        # до 2 маркеров одного типа — обычно левая и правая сторона
+        # до 3 маркеров одного типа (несколько участков), тег при этом один
         items = sorted(
             items,
             key=lambda f: (f["confidence"] + f.get("strength", 0), f["confidence"]),
@@ -548,13 +564,13 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
             side = (
                 "L" if "left" in rid else
                 "R" if "right" in rid else
-                rid
+                rid or f"z{len(picked)}"
             )
             if side in seen_side:
                 continue
             picked.append(f)
             seen_side.add(side)
-            if len(picked) >= 2:
+            if len(picked) >= 3:
                 break
         if not picked:
             continue
@@ -562,6 +578,8 @@ def analyze_skin_photo(image_bytes, filename="photo.jpg"):
         area_label = top["region_label"]
         if len(picked) == 2:
             area_label = f"{picked[0]['region_label']} и {picked[1]['region_label']}"
+        elif len(picked) >= 3:
+            area_label = ", ".join(p["region_label"] for p in picked)
         features.append({
             "id": ftype,
             "label": top["label"],

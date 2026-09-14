@@ -1317,15 +1317,55 @@ def _detect_pigmentation(grid, bbox, regions, base):
     return findings[:4]
 
 
+def _is_hair_like_pixel(grid, x, y, skin_luma_ref):
+    """
+    Волос/чёлка: темнее кожи + направленный микроконтраст (нить),
+    а не изотропная «ямка» поры.
+    """
+    w = grid.w
+    if x <= 1 or y <= 1 or x >= w - 2 or y >= grid.h - 2:
+        return True
+    i = y * w + x
+    L = grid.luma[i]
+    # заметно темнее типичной кожи зоны
+    if L > skin_luma_ref - 16:
+        return False
+    gx, gy = grid.grad(x, y)
+    gmax, gmin = max(gx, gy), min(gx, gy)
+    aniso = gmax / (gmin + 1.6)
+    lap = grid.lap(x, y)
+    # тёмная направленная структура = прядь, не пора
+    if L < skin_luma_ref - 28 and aniso >= 1.85 and lap >= 6.0:
+        return True
+    if aniso >= 2.4 and lap >= 9.0 and L < skin_luma_ref - 18:
+        return True
+    return False
+
+
+def _filter_hair_pixels(grid, pts):
+    """Убирает пиксели волос; возвращает (очищенные_pts, доля_волос)."""
+    if len(pts) < 10:
+        return pts, 0.0
+    lumas = sorted(grid.luma[y * grid.w + x] for x, y in pts)
+    ref = lumas[len(lumas) // 2]
+    clean = [(x, y) for x, y in pts if not _is_hair_like_pixel(grid, x, y, ref)]
+    hair_frac = 1.0 - (len(clean) / max(1, len(pts)))
+    return clean, hair_frac
+
+
 def _detect_texture(grid, bbox, regions, base):
-    """Расширенные поры / неровная текстура по микроконтрасту зоны."""
+    """
+    Расширенные поры / неровная текстура по микроконтрасту зоны.
+    Волосы и линия роста никогда не считаются порами.
+    """
     findings = []
     skin_all = _bbox_skin_set(grid, bbox)
-    for rid in ("nose", "left_cheek", "right_cheek", "chin", "forehead"):
+    # Лоб намеренно исключён: чёлка/линия роста дают ложный микроконтраст «пор».
+    for rid in ("nose", "left_cheek", "right_cheek", "chin"):
         pts = regions.get(rid) or []
         if len(pts) < 40:
             continue
-        # глубокая эрозия зоны: микроконтраст меряем вдали от волос и границ
+        # глубокая эрозия зоны: микроконтраст меряем вдали от границ
         pset = set(pts)
         pts = [
             (x, y) for x, y in pts
@@ -1334,6 +1374,10 @@ def _detect_texture(grid, bbox, regions, base):
                    if abs(dx) + abs(dy) <= 2)
         ]
         if len(pts) < 40:
+            continue
+        pts, hair_frac = _filter_hair_pixels(grid, pts)
+        # зона сильно засорена волосами — не анализируем как поры
+        if hair_frac > 0.22 or len(pts) < 40:
             continue
         if _skin_ring_fraction(pts, skin_all, radius=3) < 0.82:
             continue
@@ -1350,12 +1394,23 @@ def _detect_texture(grid, bbox, regions, base):
             continue
         cx, cy, bx0, by0, bx1, by1 = geom
         fx, fy = _face_frac(cx, cy, bbox)
-        if "cheek" in rid and (fx < 0.22 or fx > 0.78 or fy > 0.74):
+        # линия роста / виски / верх кадра — не поры
+        if fy < 0.22 or fy > 0.78:
+            continue
+        if "cheek" in rid and (fx < 0.24 or fx > 0.76 or fy > 0.74):
+            continue
+        if rid == "chin" and fy < 0.78:
             continue
         rlabel = dict((r[0], r[1]) for r in _REGIONS)[rid]
         strength = min(1.0, (ratio - 1.3) / 1.2 + (tex - 7.5) / 25.0)
         conf = min(0.93, 0.5 + (ratio - 1.3) * 0.4 + tex / 80.0)
-        ftype = "pores" if rid in ("nose", "forehead", "chin") or ratio >= 1.55 else "uneven_texture"
+        # Поры — нос и щёки; подбородок чаще текстура, если сигнал не очень сильный
+        ftype = "pores" if rid in ("nose", "left_cheek", "right_cheek") or ratio >= 1.65 else "uneven_texture"
+        if ftype == "pores" and hair_frac > 0.12:
+            # остаточный волос в зоне — понижаем до текстуры или отбрасываем слабый сигнал
+            if conf < CONF_FLOOR + 0.12:
+                continue
+            ftype = "uneven_texture"
         evidence = (
             "неоднородная текстура и заметные устья пор относительно остальной кожи"
             if ftype == "pores"
@@ -1369,6 +1424,26 @@ def _detect_texture(grid, bbox, regions, base):
         })
     findings.sort(key=lambda f: f["confidence"], reverse=True)
     return findings[:3]
+
+
+def _drop_hairline_false_pores(findings, bbox):
+    """Финальный отсев: поры на линии роста волос / лбу не показываем."""
+    out = []
+    for f in findings:
+        if f.get("type") != "pores":
+            out.append(f)
+            continue
+        if f.get("region") == "forehead":
+            continue
+        geom = f.get("geom") or {}
+        # geom в % кадра; переведём грубо через face frac если есть cx/cy в абсолюте
+        # маркеры хранят x,y в процентах всего кадра — используем region + evidence
+        # Доп. защита: если регион лоб или метка области содержит «лоб» — drop
+        label = (f.get("region_label") or "") + " " + (f.get("region") or "")
+        if "лоб" in label.lower() or "forehead" in label.lower():
+            continue
+        out.append(f)
+    return out
 
 
 def _detect_shine(grid, bbox, regions, base):
@@ -1811,6 +1886,7 @@ def analyze(image_bytes):
     raw += _detect_dullness(grid, bbox, regions, base)
 
     merged = _merge_findings(raw)
+    merged = _drop_hairline_false_pores(merged, bbox)
     # Сосудистая краснота уже описывает щёки — не дублируем её ещё и
     # обычной «краснотой» в тех же зонах.
     if any(f["type"] == "rosacea_like" for f in merged):

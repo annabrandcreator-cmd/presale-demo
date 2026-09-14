@@ -307,6 +307,29 @@ def t_cheek_inward():
             assert z["x"] <= 76.0, f"краснота на правом краю лица: x={z['x']}"
 results.append(run("щечные маркеры — внутри лица, не на силуэте", t_cheek_inward))
 
+# 11. Чёлка / волосы на лбу ≠ расширенные поры
+def t_bangs_not_pores():
+    img = base_face()
+    d = ImageDraw.Draw(img)
+    px = img.load()
+    # тёмные «пряди» на верхнем лбу / линии роста — имитация чёлки
+    for i, x0 in enumerate(range(220, 420, 14)):
+        for t in range(0, 55):
+            x = x0 + (t % 3) - 1
+            y = 130 + t + (i % 5)
+            if 0 <= x < img.width and 0 <= y < img.height:
+                r, g, b = px[x, y]
+                px[x, y] = (max(0, r - 70), max(0, g - 75), max(0, b - 65))
+        d.line([(x0, 125), (x0 + 2, 185)], fill=(60, 45, 35), width=2)
+    scan = cosmetic_engine.analyze_skin_photo(to_bytes(img))
+    pores = [z for z in scan["zones"] if z["metric_id"] == "pores"]
+    for z in pores:
+        assert z.get("region") != "forehead", f"чёлка на лбу как поры: {z}"
+        assert "Лоб" not in (z.get("area") or ""), f"поры в зоне лба: {z}"
+        # маркер не должен сидеть у линии роста (верх лица)
+        assert z["y"] >= 28.0, f"маркер пор слишком высоко (похоже на волосы): y={z['y']}% {z}"
+results.append(run("чёлка/волосы на лбу ≠ расширенные поры", t_bangs_not_pores))
+
 print()
 print(f"{sum(results)}/{len(results)} проверок пройдено")
 raise SystemExit(0 if all(results) else 1)
