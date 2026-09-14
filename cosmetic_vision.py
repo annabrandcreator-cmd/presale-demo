@@ -1112,9 +1112,26 @@ def _eye_pair_is_plausible(left, right, bbox):
         return False
     if not (0.26 <= (rfx - lfx) <= 0.62):
         return False
-    if not (0.26 <= lfy <= 0.54 and 0.26 <= rfy <= 0.54):
+    # выше ~0.32 часто брови; ниже 0.56 — уже щека
+    if not (0.32 <= lfy <= 0.56 and 0.32 <= rfy <= 0.56):
         return False
     return True
+
+
+def _level_eye_pair(left, right, bbox):
+    """
+    Если один детектор сел на бровь, а другой на глаз — выровнять оба
+    по НИЖНЕМУ центру (на фото это зрачок, не бровь).
+    """
+    if not left or not right:
+        return left, right
+    fh = max(1, bbox[3] - bbox[1])
+    if abs(left[1] - right[1]) <= 0.022 * fh:
+        return left, right
+    eye_y = max(left[1], right[1])
+    lh = left[2] if len(left) > 2 else 0.075 * fh
+    rh = right[2] if len(right) > 2 else 0.075 * fh
+    return (left[0], eye_y, lh), (right[0], eye_y, rh)
 
 
 def _eyes_from_cascade(grid, bbox, source_img):
@@ -1181,7 +1198,7 @@ def _eyes_from_cascade(grid, bbox, source_img):
                 for ex, ey, ew, eh in found if found is not None else []:
                     rel_y = (ey + eh * 0.5) / max(1, gh_px)
                     rel_x = (ex + ew * 0.5) / max(1, gw_px)
-                    if not (0.28 <= rel_y <= 0.58):
+                    if not (0.32 <= rel_y <= 0.58):
                         continue
                     if not (0.10 <= rel_x <= 0.90):
                         continue
@@ -1229,8 +1246,9 @@ def _eyes_from_dark_blobs(grid, bbox):
     eyes = {}
     for side, fx0, fx1 in (("left", 0.18, 0.46), ("right", 0.54, 0.82)):
         rows = []
-        y_lo = max(y0, y0 + int(0.28 * fh))
-        y_hi = min(y1, y0 + int(0.54 * fh))
+        # старт ниже бровей: 0.34–0.56 доли лица
+        y_lo = max(y0, y0 + int(0.34 * fh))
+        y_hi = min(y1, y0 + int(0.56 * fh))
         x_lo = max(x0, x0 + int(fx0 * fw))
         x_hi = min(x1, x0 + int(fx1 * fw))
         if y_hi <= y_lo or x_hi <= x_lo:
@@ -1258,12 +1276,8 @@ def _eyes_from_dark_blobs(grid, bbox):
         clusters = [c for c in clusters if len(c) >= 1]
         if not clusters:
             continue
-        # бровь — верхний кластер; глаз — следующий ниже (если есть)
-        eye_cluster = clusters[-1] if len(clusters) == 1 else clusters[1] if len(clusters) >= 2 else clusters[0]
-        if len(clusters) >= 2:
-            # выбираем самый «тёмный» из нижних кластеров
-            lower = clusters[1:]
-            eye_cluster = min(lower, key=lambda c: sum(r[1] for r in c) / len(c))
+        # бровь выше, глаз ниже — всегда берём самый нижний кластер
+        eye_cluster = clusters[-1]
         pts = [(lum, x, r[0]) for r in eye_cluster for lum, x in r[3]]
         if len(pts) < 6:
             continue
@@ -1301,44 +1315,51 @@ def _find_eye_centers(grid, bbox, source_img=None):
     cascade = _eyes_from_cascade(grid, bbox, source_img) or {}
     left = with_h(cascade.get("left"))
     right = with_h(cascade.get("right"))
+    left, right = _level_eye_pair(left, right, bbox)
 
     if not _eye_pair_is_plausible(left, right, bbox):
         blobs = {k: with_h(v) for k, v in _eyes_from_dark_blobs(grid, bbox).items()}
-        merged_left = left or blobs.get("left")
-        merged_right = right or blobs.get("right")
+        merged_left, merged_right = _level_eye_pair(
+            left or blobs.get("left"), right or blobs.get("right"), bbox
+        )
         if _eye_pair_is_plausible(merged_left, merged_right, bbox):
             left, right = merged_left, merged_right
-        elif _eye_pair_is_plausible(blobs.get("left"), blobs.get("right"), bbox):
-            left, right = blobs["left"], blobs["right"]
         else:
-            single = None
-            for side, cand in (
-                ("left", left), ("right", right),
-                ("left", blobs.get("left")), ("right", blobs.get("right")),
-            ):
-                if not cand:
-                    continue
-                fx, fy = _face_frac(cand[0], cand[1], bbox)
-                on_side = (side == "left" and 0.14 <= fx <= 0.46) or (
-                    side == "right" and 0.54 <= fx <= 0.86
-                )
-                if on_side and 0.30 <= fy <= 0.56:
-                    single = (side, cand)
-                    break
-            if single:
-                side, cand = single
-                fx, _fy = _face_frac(cand[0], cand[1], bbox)
-                mirror = (x0 + (1.0 - fx) * fw, cand[1], cand[2])
-                if side == "left":
-                    left, right = cand, mirror
-                else:
-                    right, left = cand, mirror
+            blob_l, blob_r = _level_eye_pair(blobs.get("left"), blobs.get("right"), bbox)
+            if _eye_pair_is_plausible(blob_l, blob_r, bbox):
+                left, right = blob_l, blob_r
             else:
-                g = geometric()
-                left, right = g["left"], g["right"]
+                # один надёжный глаз: берём САМЫЙ НИЖНИЙ кандидат (не бровь)
+                cands = []
+                for side, cand in (
+                    ("left", left), ("right", right),
+                    ("left", blobs.get("left")), ("right", blobs.get("right")),
+                ):
+                    if not cand:
+                        continue
+                    fx, fy = _face_frac(cand[0], cand[1], bbox)
+                    on_side = (side == "left" and 0.14 <= fx <= 0.46) or (
+                        side == "right" and 0.54 <= fx <= 0.86
+                    )
+                    if on_side and 0.32 <= fy <= 0.56:
+                        cands.append((side, cand))
+                if cands:
+                    side, cand = max(cands, key=lambda sc: sc[1][1])
+                    fx, _fy = _face_frac(cand[0], cand[1], bbox)
+                    mirror = (x0 + (1.0 - fx) * fw, cand[1], cand[2])
+                    if side == "left":
+                        left, right = cand, mirror
+                    else:
+                        right, left = cand, mirror
+                else:
+                    g = geometric()
+                    left, right = g["left"], g["right"]
 
-    # селфи анфас: зрачки на одном уровне
-    eye_y = (left[1] + right[1]) / 2.0
+    left, right = _level_eye_pair(left, right, bbox)
+    # селфи анфас: общий уровень = ниже из двух (если один ещё на брови)
+    eye_y = max(left[1], right[1])
+    if abs(left[1] - right[1]) <= 0.02 * fh:
+        eye_y = (left[1] + right[1]) / 2.0
     eye_h = max(0.045 * fh, min(0.11 * fh, (left[2] + right[2]) / 2.0))
     eyes = {"left": (left[0], eye_y, eye_h), "right": (right[0], eye_y, eye_h)}
     if not _eye_pair_is_plausible(eyes["left"], eyes["right"], bbox):
@@ -1351,10 +1372,10 @@ def _find_eye_centers(grid, bbox, source_img=None):
 # (сдвиг по X к внутреннему углу, множитель отступа вниз от зрачка)
 # (сдвиг по X к внутреннему углу / наружу, доп. доля высоты лица вниз от базы)
 _EYE_MARKER_OFFSET = {
-    "dark_circles": (0.010, 0.000),
-    "tired_eyes": (-0.022, 0.008),
-    "puffiness": (0.000, 0.012),
-    "wrinkles": (-0.020, -0.008),  # ближе к нижнему веку
+    "dark_circles": (0.010, 0.004),
+    "tired_eyes": (-0.022, 0.010),
+    "puffiness": (0.000, 0.014),
+    "wrinkles": (-0.020, 0.002),  # под веком, не на зрачке
     "dryness": (0.024, 0.006),
     "pigmentation": (-0.030, 0.010),
 }
@@ -1376,12 +1397,12 @@ def _anchor_under_eye(cx, cy, bbox, rid, eyes=None, ftype=None):
     if eye:
         ex, ey = eye[0], eye[1]
         eye_h = eye[2] if len(eye) > 2 else 0.075 * fh
-        # сразу под веком: не меньше ~0.7 высоты глаза и не на щеке
-        drop = min(0.11 * fh, max(0.072 * fh, eye_h * 1.05))
+        # сразу под веком: заметный отступ от зрачка, без ухода на щёку
+        drop = min(0.12 * fh, max(0.080 * fh, eye_h * 1.15))
         cy = ey + drop + dy_extra * fh
-        # жёстко ниже зрачка — иначе «очки»
-        cy = max(cy, ey + max(0.070 * fh, eye_h * 0.95))
-        cy = min(cy, ey + 0.125 * fh)
+        # жёстко ниже зрачка — иначе маркер «на глазах»
+        cy = max(cy, ey + max(0.078 * fh, eye_h * 1.05))
+        cy = min(cy, ey + 0.135 * fh)
         dx = dx_frac * fw if side == "left" else -dx_frac * fw
         cx = max(x0 + 0.12 * fw, min(x1 - 0.12 * fw, ex + dx))
         return cx, cy
@@ -1642,7 +1663,8 @@ def _detect_dark_circles(grid, bbox, regions, base):
         core = dark_sorted[: max(6, len(dark_sorted) // 3)]
         cx = sum(p[0] for p in core) / len(core)
         cy = sum(p[1] for p in core) / len(core)
-        cx, cy = _anchor_under_eye(cx, cy, bbox, rid)
+        # глаза передаёт analyze через sanitize; здесь fallback без eyes
+        cx, cy = _anchor_under_eye(cx, cy, bbox, rid, ftype="dark_circles")
         bx0, by0 = min(p[0] for p in core), min(p[1] for p in core)
         bx1, by1 = max(p[0] for p in core), max(p[1] for p in core)
         strength = min(1.0, (deficit - 16) / 32.0 + (frac - frac_floor) * 0.9)

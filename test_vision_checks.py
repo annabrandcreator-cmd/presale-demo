@@ -382,15 +382,14 @@ def t_eye_markers_under_not_on_pupils():
             assert not any(_in_rect(fx, fy, r) for r in _EXCLUDE), \
                 f"маркер в глазу/рту: {z['metric_id']} face=({fx:.3f},{fy:.3f}) img%=({z['x']:.1f},{z['y']:.1f})"
         if z["metric_id"] in ("dark_circles", "tired_eyes", "puffiness") or "under_eye" in rid:
-            # ниже зрачков synthetic (~y340) и ниже найденных глаз
-            assert cy > 355, f"маркер слишком высоко (на уровне глаз): y_px={cy:.0f} {z}"
+            # только относительно найденных зрачков — абсолютный y_px ломается
+            # при сдвиге Haar-бокса / размера глаз на synthetic
             side = "left" if z["x"] < 50 else "right"
-            if side in eyes:
-                # глаза в сетке → в % исходного кадра
-                ex, ey = eyes[side][0], eyes[side][1]
-                eye_y_pct = 100.0 * ey / gh
-                assert z["y"] > eye_y_pct + 2.5, \
-                    f"маркер не ниже зрачка: zone_y={z['y']} eye_y={eye_y_pct:.1f} {z}"
+            assert side in eyes, f"нет глаза {side} для маркера: {z}"
+            ey = eyes[side][1]
+            eye_y_pct = 100.0 * ey / gh
+            assert z["y"] > eye_y_pct + 2.5, \
+                f"маркер не ниже зрачка: zone_y={z['y']} eye_y={eye_y_pct:.1f} y_px={cy:.0f} {z}"
             from cosmetic_vision import _geom_hits_eye
             geom = {"x": z["x"], "y": z["y"], "w": 6, "h": 6}
             assert not _geom_hits_eye(geom, gb, eyes, grid), \
