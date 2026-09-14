@@ -2311,7 +2311,7 @@ def _scan_patch(arr, rect, scale):
     return crop
 
 
-def _scan_line_energy(patch):
+def _scan_line_energy(patch, allow_diagonal=False):
     """
     Энергия тонких тёмных линий на коже участка.
     blackhat отзывается на узкие складки и не реагирует на плавную тень.
@@ -2336,7 +2336,7 @@ def _scan_line_energy(patch):
     dark = cv2.dilate((gray < med - 45).astype(np.uint8), np.ones((3, 3), np.uint8))
     skin = skin * (1 - dark)
     skin_frac = float(skin.mean())
-    if skin_frac < 0.45:
+    if skin_frac < 0.40:
         return None
     bh = cv2.morphologyEx(
         cv2.GaussianBlur(gray, (3, 3), 0),
@@ -2344,7 +2344,7 @@ def _scan_line_energy(patch):
         cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)),
     )
     vals = bh[skin > 0].astype(np.float32)
-    if vals.size < 60:
+    if vals.size < 50:
         return None
     mask = ((bh >= max(6, np.percentile(vals, 93))) * skin).astype(np.uint8)
     mask = cv2.morphologyEx(
@@ -2353,22 +2353,26 @@ def _scan_line_energy(patch):
     count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
     nh, nw = mask.shape
     lines = 0
-    horizontal = np.zeros_like(mask)
+    kept = np.zeros_like(mask)
     for i in range(1, count):
         _, _, cw, ch, area = stats[i]
         length = max(cw, ch)
         thick = max(1, min(cw, ch))
-        if area < 5 or length < max(6, 0.13 * nw) or length / thick < 2.0:
+        if area < 5 or length < max(6, 0.12 * nw) or length / thick < 2.0:
             continue
-        # морщины у глаз идут поперёк лица; вертикальные тяжи — это пряди волос
-        if cw < ch:
+        # под глазом — только поперечные; у внешнего угла гусиные лапки
+        # часто идут по диагонали к виску
+        if not allow_diagonal and cw < ch:
+            continue
+        if allow_diagonal and ch > 2.4 * cw:
+            # чистые вертикальные пряди волос — всё ещё отсекаем
             continue
         lines += 1
-        horizontal[labels == i] = 1
+        kept[labels == i] = 1
     return {
         "p90": float(np.percentile(vals, 90)),
         "p98": float(np.percentile(vals, 98)),
-        "cover": float(horizontal.mean()),
+        "cover": float(kept.mean()),
         "lines": lines,
         "skin": skin_frac,
     }
@@ -2431,19 +2435,42 @@ def _eye_line_scan(source_img, grid, bbox, eyes):
             _scan_patch(arr, (ex - 0.23 * dist, ey + 0.16 * dist,
                               ex + 0.23 * dist, ey + 0.38 * dist), scale)
         )
-        cx0 = ex + sign * 0.22 * dist
-        cx1 = ex + sign * 0.42 * dist
-        crow = _scan_line_energy(
-            _scan_patch(arr, (min(cx0, cx1), ey - 0.02 * dist,
-                              max(cx0, cx1), ey + 0.24 * dist), scale)
-        )
+        # гусиные лапки: несколько полос у внешнего угла (снаружи → ближе к глазу),
+        # диагональные лучи тоже считаем; волосы у виска отсекаются по доле кожи
+        crow = None
+        for outer, inner, y0f, y1f in (
+            (0.20, 0.40, -0.04, 0.22),
+            (0.14, 0.32, -0.02, 0.20),
+            (0.10, 0.26, 0.00, 0.18),
+        ):
+            a = ex + sign * outer * dist
+            b = ex + sign * inner * dist
+            cand = _scan_line_energy(
+                _scan_patch(arr, (min(a, b), ey + y0f * dist,
+                                  max(a, b), ey + y1f * dist), scale),
+                allow_diagonal=True,
+            )
+            if not cand:
+                continue
+            if crow is None or (
+                cand["lines"], cand["p98"]
+            ) > (crow["lines"], crow["p98"]):
+                crow = cand
+            if cand["lines"] >= 1 and cand["skin"] >= 0.55:
+                break
         ref = _scan_line_energy(
             _scan_patch(arr, (ex + sign * 0.02 * dist - 0.16 * dist, ey + 0.60 * dist,
                               ex + sign * 0.02 * dist + 0.16 * dist, ey + 0.88 * dist), scale)
         )
+        under_v = _scan_verdict(under, ref, _SCAN_UNDER_RATIO)
+        crow_v = _scan_verdict(crow, ref, _SCAN_CROW_RATIO)
+        # одиночная «линия» у виска без морщин под глазом — часто тень/волосы
+        if crow_v and crow_v["hit"] and crow and crow["lines"] < 2:
+            if not (under_v and under_v["hit"]):
+                crow_v = {**crow_v, "hit": False}
         out[side] = {
-            "under": _scan_verdict(under, ref, _SCAN_UNDER_RATIO),
-            "crow": _scan_verdict(crow, ref, _SCAN_CROW_RATIO),
+            "under": under_v,
+            "crow": crow_v,
         }
     return out
 
@@ -2787,11 +2814,15 @@ def _detect_wrinkles(grid, bbox, regions, base, eyes=None, source_img=None):
         hit_o, _, _, peaks_o = _crow_feet_signal(
             grid, crow_o, under_floor, cheek_pts=cheek_o, bbox=bbox, side=other, eyes=eyes
         )
-        # морщины у глаз почти всегда симметричны: на второй стороне
-        # достаточно ослабленного, но реального следа линий
+        # морщины у глаз почти всегда симметричны: вторую сторону
+        # достраиваем только если там тоже есть реальный след линий
         sc_o = ((scan or {}).get(other) or {}).get("crow")
-        if sc_o and sc_o["ratio"] >= _SCAN_CROW_RATIO * 0.72:
+        if sc_o and sc_o.get("hit"):
             hit_o, peaks_o = True, max(peaks_o, 2 + sc_o["lines"])
+        elif sc_o and sc_o["lines"] >= 1 and sc_o["ratio"] >= _SCAN_CROW_RATIO * 0.85:
+            under_o = ((scan or {}).get(other) or {}).get("under")
+            if under_o and under_o.get("hit"):
+                hit_o, peaks_o = True, max(peaks_o, 2 + sc_o["lines"])
         if hit_o:
             cx, cy = _anchor_crow_feet(bbox, other, eyes=eyes)
             findings.append({
