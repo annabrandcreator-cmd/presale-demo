@@ -133,11 +133,11 @@ def _detect_face_haar(img):
         )
         if cascade.empty():
             return _FACE_NO_CV
-        min_side = max(48, round(min(gray.shape) * 0.18))
+        min_side = max(40, round(min(gray.shape) * 0.14))
         faces = cascade.detectMultiScale(gray, 1.1, 5, minSize=(min_side, min_side))
         if faces is None or len(faces) == 0:
-            # второй проход чуть мягче — дальние селфи, но не «поллица»
-            soft = max(40, round(min(gray.shape) * 0.12))
+            # второй проход чуть мягче — дальние селфи / вебкамы ноутбука
+            soft = max(32, round(min(gray.shape) * 0.10))
             faces = cascade.detectMultiScale(gray, 1.08, 4, minSize=(soft, soft))
             soft_pass = True
         else:
@@ -147,7 +147,7 @@ def _detect_face_haar(img):
         x, y, fw, fh = max(faces, key=lambda f: f[2] * f[3])
         sw, sh = small.size
         # лицо должно занимать заметную долю кадра (не «случайный» квадрат на фоне)
-        if (fw * fh) / max(1, sw * sh) < 0.04:
+        if (fw * fh) / max(1, sw * sh) < 0.028:
             return _FACE_MISSING
         # Мягкий проход: отсекаем явные обрезы по краю сразу.
         if soft_pass:
@@ -511,10 +511,11 @@ def _validate_face_framing(face_frac, grid, bbox):
     cx = (fx0 + fx1) / 2.0
 
     # Лицо слишком маленькое в кадре — нельзя оценить зоны.
-    if fw < 0.18 or fh < 0.22 or (fw * fh) < 0.055:
+    # Порог мягче для вебкама ноутбука (человек дальше, чем в селфи с телефона).
+    if fw < 0.14 or fh < 0.18 or (fw * fh) < 0.038:
         raise PhotoQualityError(
             "Лицо слишком далеко или мелко в кадре. "
-            "Сделайте селфи ближе, анфас, чтобы лицо занимало большую часть кадра."
+            "Подойдите ближе к камере, анфас, чтобы лицо заполняло овал на экране."
         )
 
     # Обрезка по бокам / сверху / снизу.
