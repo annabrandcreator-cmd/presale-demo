@@ -1,0 +1,2047 @@
+{
+  "brand": {
+    "name": "Oomph",
+    "tagline": "Натуральная косметика ручной работы",
+    "url": "https://oomph.ru/",
+    "category": "Лицо",
+    "category_url": "https://oomph.ru/catalog/lico",
+    "legal": "Демо AI-консультанта по категории «Лицо». Не официальный сайт бренда."
+  },
+  "promo": {
+    "code": "OOMPH5",
+    "discount_pct": 5,
+    "label": "Промокод на скидку 5% на подобранный уход для лица"
+  },
+  "taxonomy": {
+    "skin_types": [
+      {
+        "value": "vse-tipy-kozhi",
+        "label": "Все типы кожи"
+      },
+      {
+        "value": "zhirnaya-kombinirovannaya",
+        "label": "Жирная / Комбинированная"
+      },
+      {
+        "value": "zrelaya-kozha",
+        "label": "Зрелая кожа"
+      },
+      {
+        "value": "normalnaya",
+        "label": "Нормальная"
+      },
+      {
+        "value": "sukhaya",
+        "label": "Сухая"
+      },
+      {
+        "value": "sukhaya-obezvozhennaya",
+        "label": "Сухая / Обезвоженная"
+      },
+      {
+        "value": "chuvstvitelnaya",
+        "label": "Чувствительная"
+      },
+      {
+        "value": "chuvstvitelnaya-sklonnaya-k-pokrasneniyam",
+        "label": "Чувствительная / Склонная к покраснениям"
+      }
+    ],
+    "effects": [
+      {
+        "value": "antibakterialnyy",
+        "label": "Антибактериальный"
+      },
+      {
+        "value": "antibakterialnyy-anti-akne",
+        "label": "Антибактериальный / Анти-акне"
+      },
+      {
+        "value": "antivozrastnoy-protiv-morschin",
+        "label": "Антивозрастной / Против морщин"
+      },
+      {
+        "value": "antisepticheskiy",
+        "label": "Антисептический"
+      },
+      {
+        "value": "bez-effekta-lipkosti",
+        "label": "Без эффекта липкости"
+      },
+      {
+        "value": "blesk-i-siyanie",
+        "label": "Блеск и сияние"
+      },
+      {
+        "value": "bystryy-ukhod-ekspress",
+        "label": "Быстрый уход (экспресс)"
+      },
+      {
+        "value": "vosstanovlenie-i-pitanie",
+        "label": "Восстановление и питание"
+      },
+      {
+        "value": "glubokoe-ochischenie-0",
+        "label": "Глубокое очищение"
+      },
+      {
+        "value": "glubokoe-ochischenie-piling",
+        "label": "Глубокое очищение / Пилинг"
+      },
+      {
+        "value": "glubokoe-ochischenie-i-detoks",
+        "label": "Глубокое очищение и детокс"
+      },
+      {
+        "value": "detoks-i-suzhenie-por",
+        "label": "Детокс и сужение пор"
+      },
+      {
+        "value": "ezhednevnoe-myagkoe-ochischenie",
+        "label": "Ежедневное мягкое очищение"
+      },
+      {
+        "value": "zazhivlenie-potreskavshikhsya-gub",
+        "label": "Заживление потрескавшихся губ"
+      },
+      {
+        "value": "kontrol-por-i-zhirnosti",
+        "label": "Контроль пор и жирности"
+      },
+      {
+        "value": "matirovanie",
+        "label": "Матирование"
+      },
+      {
+        "value": "matirovanie-i-kontrol-zhirnosti",
+        "label": "Матирование и контроль жирности"
+      },
+      {
+        "value": "myagkoe-otshelushivanie",
+        "label": "Мягкое отшелушивание"
+      },
+      {
+        "value": "osvezhayuschiy-okhlazhdayuschiy",
+        "label": "Освежающий / Охлаждающий"
+      },
+      {
+        "value": "osvetlenie-i-vyravnivanie-tona",
+        "label": "Осветление и выравнивание тона"
+      },
+      {
+        "value": "otshelushivanie-i-skrab",
+        "label": "Отшелушивание и скраб"
+      },
+      {
+        "value": "otshelushivayuschiy",
+        "label": "Отшелушивающий"
+      },
+      {
+        "value": "ochischenie",
+        "label": "Очищение"
+      },
+      {
+        "value": "pitanie-smyagchenie",
+        "label": "Питание / Смягчение"
+      },
+      {
+        "value": "siyanie-0",
+        "label": "Сияние"
+      },
+      {
+        "value": "siyanie-khaylayt",
+        "label": "Сияние / Хайлайт"
+      },
+      {
+        "value": "siyanie-i-vyravnivanie-tona",
+        "label": "Сияние и выравнивание тона"
+      },
+      {
+        "value": "smyagchenie",
+        "label": "Смягчение"
+      },
+      {
+        "value": "tonizirovanie-i-obnovlenie-kletok",
+        "label": "Тонизирование и обновление клеток"
+      },
+      {
+        "value": "uvlazhnenie",
+        "label": "Увлажняющий"
+      },
+      {
+        "value": "uvlazhnyayuschiy-pitatelnyy",
+        "label": "Увлажняющий / Питательный"
+      },
+      {
+        "value": "uspokaivayuschiy",
+        "label": "Успокаивающий"
+      },
+      {
+        "value": "uspokoenie-i-snyatie-pokrasneniy",
+        "label": "Успокоение и снятие покраснений"
+      },
+      {
+        "value": "uspokoenie-i-snyatie-razdrazheniya",
+        "label": "Успокоение и снятие раздражения"
+      },
+      {
+        "value": "uspokoenie-chuvstvitelnoy-kozhi",
+        "label": "Успокоение чувствительной кожи"
+      }
+    ],
+    "tasks": [
+      {
+        "value": "snyatie-otyokov",
+        "label": "Снятие отёков"
+      },
+      {
+        "value": "snyatie-tyomnykh-krugov-i-pigmentacii",
+        "label": "Снятие тёмных кругов и пигментации"
+      },
+      {
+        "value": "snyatie-ustalosti-vzglyada",
+        "label": "Снятие усталости взгляда"
+      },
+      {
+        "value": "tonizirovanie-i-vyravnivanie-tona",
+        "label": "Тонизирование и выравнивание тона"
+      },
+      {
+        "value": "uvlazhnenie-kozhi-vokrug-glaz",
+        "label": "Увлажнение кожи вокруг глаз"
+      }
+    ]
+  },
+  "questions": [
+    {
+      "id": "photo_choice",
+      "text": "Можно загрузить фото кожи — AI сам определит видимые особенности и подберёт уход Oomph.",
+      "type": "photo",
+      "options": [
+        {
+          "value": "upload",
+          "label": "Сфотографировать / загрузить"
+        },
+        {
+          "value": "skip",
+          "label": "Продолжить без фото"
+        }
+      ]
+    },
+    {
+      "id": "day_feel",
+      "text": "Как кожа обычно чувствует себя в течение дня?",
+      "type": "choice",
+      "options": [
+        {
+          "value": "oily_fast",
+          "label": "Быстро появляется жирный блеск"
+        },
+        {
+          "value": "combo",
+          "label": "Т-зона блестит, а щёки могут быть сухими"
+        },
+        {
+          "value": "comfort",
+          "label": "Кожа чувствует себя комфортно"
+        },
+        {
+          "value": "dry_tight",
+          "label": "Часто появляется сухость или стянутость"
+        },
+        {
+          "value": "unknown",
+          "label": "Сложно сказать"
+        }
+      ]
+    },
+    {
+      "id": "reactivity",
+      "text": "Как кожа обычно реагирует на новые средства или активный уход?",
+      "type": "choice",
+      "options": [
+        {
+          "value": "tolerant",
+          "label": "Обычно спокойно"
+        },
+        {
+          "value": "sometimes",
+          "label": "Иногда появляется покраснение или дискомфорт"
+        },
+        {
+          "value": "sensitive",
+          "label": "Часто реагирует покраснением, жжением или раздражением"
+        },
+        {
+          "value": "unknown",
+          "label": "Не знаю"
+        }
+      ]
+    },
+    {
+      "id": "redness_freq",
+      "text": "Как часто у вас появляется покраснение кожи?",
+      "type": "choice",
+      "conditional": "redness",
+      "options": [
+        {
+          "value": "rare",
+          "label": "Только иногда"
+        },
+        {
+          "value": "often",
+          "label": "Появляется довольно часто"
+        },
+        {
+          "value": "daily",
+          "label": "Кожа краснеет практически каждый день"
+        },
+        {
+          "value": "none",
+          "label": "Обычно покраснений не замечаю"
+        }
+      ]
+    },
+    {
+      "id": "breakout_freq",
+      "text": "Как часто появляются воспаления или высыпания?",
+      "type": "choice",
+      "conditional": "inflammation",
+      "options": [
+        {
+          "value": "rare",
+          "label": "Редко, отдельные высыпания"
+        },
+        {
+          "value": "periodic",
+          "label": "Периодически"
+        },
+        {
+          "value": "often",
+          "label": "Часто"
+        },
+        {
+          "value": "none",
+          "label": "Практически не появляются"
+        }
+      ]
+    },
+    {
+      "id": "tightness",
+      "text": "После умывания бывает ощущение сухости или стянутости?",
+      "type": "choice",
+      "conditional": "dryness",
+      "options": [
+        {
+          "value": "no",
+          "label": "Нет"
+        },
+        {
+          "value": "sometimes",
+          "label": "Иногда"
+        },
+        {
+          "value": "often",
+          "label": "Часто"
+        },
+        {
+          "value": "always",
+          "label": "Практически всегда"
+        }
+      ]
+    },
+    {
+      "id": "photo_priority",
+      "text": "По фото заметны несколько особенностей кожи. На чём сделать главный акцент в уходе?",
+      "type": "choice",
+      "multi": true,
+      "dynamic_accents": true,
+      "options": []
+    },
+    {
+      "id": "avoidances",
+      "text": "Есть ли что-то, чего вы предпочитаете избегать в уходе?",
+      "type": "choice",
+      "options": [
+        {
+          "value": "none",
+          "label": "Нет, особых ограничений нет"
+        },
+        {
+          "value": "acids",
+          "label": "Кислоты и пилинги"
+        },
+        {
+          "value": "fragrance",
+          "label": "Средства с выраженной отдушкой"
+        },
+        {
+          "value": "unknown",
+          "label": "Не знаю"
+        }
+      ]
+    }
+  ],
+  "products": [
+    {
+      "id": "gel-dlya-umyvaniya-sensory",
+      "name": "Гель для умывания Sensory",
+      "category": "cleanser",
+      "price_rub": 850,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-07/%D0%B3%D0%B5%D0%BB%D1%8C%20%D0%B4%D0%BB%D1%8F%20%D1%83%D0%BC%D1%8B%D0%B2%D0%B0%D0%BD%D0%B8%D1%8F%20SENSORY.jpg",
+      "url": "https://oomph.ru/product/gel-dlya-umyvaniya-sensory",
+      "tier": "mid",
+      "volume": "150 мл",
+      "effects": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "uspokoenie-i-snyatie-pokrasneniy"
+      ],
+      "effect_labels": [
+        "Ежедневное мягкое очищение",
+        "Успокоение и снятие покраснений"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "uspokoenie-i-snyatie-pokrasneniy"
+      ],
+      "tags": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "uspokoenie-i-snyatie-pokrasneniy"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "chuvstvitelnaya-sklonnaya-k-pokrasneniyam",
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Успокаивающее очищение для свежести и мягкости кожи на основе цветочных экстрактов",
+      "source": "https://oomph.ru/product/gel-dlya-umyvaniya-sensory"
+    },
+    {
+      "id": "penka-dlya-umyvaniya-nezhnaya",
+      "name": "Пенка для умывания Нежная",
+      "category": "cleanser",
+      "price_rub": 1200,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-07/%D0%BD%D0%B5%D0%B6%D0%BD%D0%B0%D1%8F.jpeg",
+      "url": "https://oomph.ru/product/penka-dlya-umyvaniya-nezhnaya",
+      "tier": "mid",
+      "volume": "150 мл",
+      "effects": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "pitanie-smyagchenie"
+      ],
+      "effect_labels": [
+        "Ежедневное мягкое очищение",
+        "Питание / Смягчение"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "pitanie-smyagchenie"
+      ],
+      "tags": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "pitanie-smyagchenie"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Очищающая пенка с нежным цветочным ароматом",
+      "source": "https://oomph.ru/product/penka-dlya-umyvaniya-nezhnaya"
+    },
+    {
+      "id": "enzimnaya-pudra-enzyme-buff",
+      "name": "Энзимная пудра Enzyme Buff",
+      "category": "exfoliant",
+      "price_rub": 900,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2025-10/OOMPH_2209_2000001122976_0252%20%281%29.jpg",
+      "url": "https://oomph.ru/product/enzimnaya-pudra-enzyme-buff",
+      "tier": "mid",
+      "volume": "100 г",
+      "effects": [
+        "glubokoe-ochischenie-piling",
+        "kontrol-por-i-zhirnosti",
+        "siyanie-i-vyravnivanie-tona"
+      ],
+      "effect_labels": [
+        "Глубокое очищение / Пилинг",
+        "Контроль пор и жирности",
+        "Сияние и выравнивание тона"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "glubokoe-ochischenie-piling",
+        "kontrol-por-i-zhirnosti",
+        "siyanie-i-vyravnivanie-tona"
+      ],
+      "tags": [
+        "glubokoe-ochischenie-piling",
+        "kontrol-por-i-zhirnosti",
+        "siyanie-i-vyravnivanie-tona"
+      ],
+      "skin_types": [
+        "vse-tipy-kozhi",
+        "zhirnaya-kombinirovannaya"
+      ],
+      "benefit": "Папаин, экстракт ананаса и салициловая кислота - это то, что нужно для сияния вашей кожи",
+      "source": "https://oomph.ru/product/enzimnaya-pudra-enzyme-buff"
+    },
+    {
+      "id": "tonik-dlya-lica-ona-lyubila-rozy",
+      "name": "Тоник для лица Она любила розы",
+      "category": "toner",
+      "price_rub": 750,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2025-12/2251%20%D0%9E%D0%BD%D0%B0%20%D0%BB%D1%8E%D0%B1%D0%B8%D0%BB%D0%B0%20%D1%80%D0%BE%D0%B7%D1%8B.jpg",
+      "url": "https://oomph.ru/product/tonik-dlya-lica-ona-lyubila-rozy",
+      "tier": "mid",
+      "volume": "150 мл",
+      "effects": [
+        "ochischenie",
+        "smyagchenie"
+      ],
+      "effect_labels": [
+        "Очищение",
+        "Смягчение"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "ochischenie",
+        "smyagchenie"
+      ],
+      "tags": [
+        "ochischenie",
+        "smyagchenie"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Мягко увлажнит и успокоит кожу",
+      "source": "https://oomph.ru/product/tonik-dlya-lica-ona-lyubila-rozy"
+    },
+    {
+      "id": "syvorotka-dlya-lica-vechnaya-molodost",
+      "name": "Сыворотка для лица Вечная молодость",
+      "category": "serum",
+      "price_rub": 1500,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-10/%D0%B2%D0%B5%D1%87%D0%BD%D0%B0%D1%8F%20%D0%BC%D0%BE%D0%BB%D0%BE%D0%B4%D0%BE%D1%81%D1%82%D1%8C%2030%20%D0%BC%D0%BB%20.jpg",
+      "url": "https://oomph.ru/product/syvorotka-dlya-lica-vechnaya-molodost",
+      "tier": "mid",
+      "volume": "30 мл",
+      "effects": [
+        "antivozrastnoy-protiv-morschin",
+        "uvlazhnenie"
+      ],
+      "effect_labels": [
+        "Антивозрастной / Против морщин",
+        "Увлажняющий"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "antivozrastnoy-protiv-morschin",
+        "uvlazhnenie"
+      ],
+      "tags": [
+        "antivozrastnoy-protiv-morschin",
+        "uvlazhnenie"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi",
+        "zrelaya-kozha"
+      ],
+      "benefit": "Эликсир вечной молодости на основе 4 форм гиалуроновой кислоты",
+      "source": "https://oomph.ru/product/syvorotka-dlya-lica-vechnaya-molodost"
+    },
+    {
+      "id": "maslo-dlya-lica-vozrozhdenie",
+      "name": "Масло для лица Возрождение",
+      "category": "oil",
+      "price_rub": 1500,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2026-05/%D0%9C%D0%B0%D1%81%D0%BB%D0%BE%20%D0%B4%D0%BB%D1%8F%20%D0%BB%D0%B8%D1%86%D0%B0%20%D0%92%D0%BE%D0%B7%D1%80%D0%BE%D0%B6%D0%B4%D0%B5%D0%BD%D0%B8%D0%B5%2030%D0%BC%D0%BB.jpeg",
+      "url": "https://oomph.ru/product/maslo-dlya-lica-vozrozhdenie",
+      "tier": "mid",
+      "volume": "30 мл",
+      "effects": [
+        "antivozrastnoy-protiv-morschin",
+        "vosstanovlenie-i-pitanie",
+        "siyanie-khaylayt"
+      ],
+      "effect_labels": [
+        "Антивозрастной / Против морщин",
+        "Восстановление и питание",
+        "Сияние / Хайлайт"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "antivozrastnoy-protiv-morschin",
+        "vosstanovlenie-i-pitanie",
+        "siyanie-khaylayt"
+      ],
+      "tags": [
+        "antivozrastnoy-protiv-morschin",
+        "vosstanovlenie-i-pitanie",
+        "siyanie-khaylayt"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi",
+        "zrelaya-kozha"
+      ],
+      "benefit": "Шелковистая и красивая кожа",
+      "source": "https://oomph.ru/product/maslo-dlya-lica-vozrozhdenie"
+    },
+    {
+      "id": "krem-dlya-lica-marvel",
+      "name": "Крем для лица Marvel",
+      "category": "cream",
+      "price_rub": 2200,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2026-05/OOMPH_%2006.04_2000001122679_0040%20%281%29.jpg",
+      "url": "https://oomph.ru/product/krem-dlya-lica-marvel",
+      "tier": "premium",
+      "volume": "45 г",
+      "effects": [
+        "antivozrastnoy-protiv-morschin",
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie",
+        "uspokoenie-chuvstvitelnoy-kozhi"
+      ],
+      "effect_labels": [
+        "Антивозрастной / Против морщин",
+        "Восстановление и питание",
+        "Увлажняющий",
+        "Успокоение чувствительной кожи"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "antivozrastnoy-protiv-morschin",
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie",
+        "uspokoenie-chuvstvitelnoy-kozhi"
+      ],
+      "tags": [
+        "antivozrastnoy-protiv-morschin",
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie",
+        "uspokoenie-chuvstvitelnoy-kozhi"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi",
+        "zrelaya-kozha"
+      ],
+      "benefit": "Восстанавливающий, успокаивающий, увлажняющий",
+      "source": "https://oomph.ru/product/krem-dlya-lica-marvel"
+    },
+    {
+      "id": "krem-dlya-lica-really-matters",
+      "name": "Крем для лица Really matters",
+      "category": "cream",
+      "price_rub": 1900,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-03/oiiSkPNw.jpeg",
+      "url": "https://oomph.ru/product/krem-dlya-lica-really-matters",
+      "tier": "premium",
+      "volume": "45 г",
+      "effects": [
+        "matirovanie",
+        "uvlazhnenie"
+      ],
+      "effect_labels": [
+        "Матирование",
+        "Увлажняющий"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "matirovanie",
+        "uvlazhnenie"
+      ],
+      "tags": [
+        "matirovanie",
+        "uvlazhnenie"
+      ],
+      "skin_types": [
+        "vse-tipy-kozhi",
+        "zhirnaya-kombinirovannaya"
+      ],
+      "benefit": "Легкий, выравнивающий, матирующий",
+      "source": "https://oomph.ru/product/krem-dlya-lica-really-matters"
+    },
+    {
+      "id": "krem-dlya-lica-skvalan",
+      "name": "Крем для лица Сквалан",
+      "category": "cream",
+      "price_rub": 2200,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-12/6PgOLmNc.jpeg",
+      "url": "https://oomph.ru/product/krem-dlya-lica-skvalan",
+      "tier": "premium",
+      "volume": "45 г",
+      "effects": [
+        "antivozrastnoy-protiv-morschin",
+        "uvlazhnenie"
+      ],
+      "effect_labels": [
+        "Антивозрастной / Против морщин",
+        "Увлажняющий"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "antivozrastnoy-protiv-morschin",
+        "uvlazhnenie"
+      ],
+      "tags": [
+        "antivozrastnoy-protiv-morschin",
+        "uvlazhnenie"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi",
+        "zrelaya-kozha"
+      ],
+      "benefit": "Подарит мягкость и эластичность",
+      "source": "https://oomph.ru/product/krem-dlya-lica-skvalan"
+    },
+    {
+      "id": "krem-dlya-lica-totalnoe-uvlazhnenie",
+      "name": "Крем для лица Тотальное увлажнение",
+      "category": "cream",
+      "price_rub": 2000,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2026-05/2225%20%D0%9A%D1%80%D0%B5%D0%BC%20%D0%B4%D0%BB%D1%8F%20%D0%BB%D0%B8%D1%86%D0%B0%20%D0%A2%D0%BE%D1%82%D0%B0%D0%BB%D1%8C%D0%BD%D0%BE%D0%B5%20%D1%83%D0%B2%D0%BB%D0%B0%D0%B6%D0%BD%D0%B5%D0%BD%D0%B8%D0%B5%202%20%281%29.jpg",
+      "url": "https://oomph.ru/product/krem-dlya-lica-totalnoe-uvlazhnenie",
+      "tier": "premium",
+      "volume": "45 г",
+      "effects": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie",
+        "uspokoenie-chuvstvitelnoy-kozhi"
+      ],
+      "effect_labels": [
+        "Восстановление и питание",
+        "Увлажняющий",
+        "Успокоение чувствительной кожи"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie",
+        "uspokoenie-chuvstvitelnoy-kozhi"
+      ],
+      "tags": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie",
+        "uspokoenie-chuvstvitelnoy-kozhi"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Насыщенный, комфортный, успокаивающий",
+      "source": "https://oomph.ru/product/krem-dlya-lica-totalnoe-uvlazhnenie"
+    },
+    {
+      "id": "khaylayter-dlya-lica-i-tela-mini-disco",
+      "name": "Хайлайтер для лица и тела Mini disco",
+      "category": "cream",
+      "price_rub": 900,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2024-12/OOMPH_241203_2000001122518_0177%20%281%29.jpg",
+      "url": "https://oomph.ru/product/khaylayter-dlya-lica-i-tela-mini-disco",
+      "tier": "mid",
+      "volume": "25 г",
+      "effects": [
+        "siyanie-khaylayt"
+      ],
+      "effect_labels": [
+        "Сияние / Хайлайт"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "siyanie-khaylayt"
+      ],
+      "tags": [
+        "siyanie-khaylayt"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Идеальный компаньон для вечеринки",
+      "source": "https://oomph.ru/product/khaylayter-dlya-lica-i-tela-mini-disco"
+    },
+    {
+      "id": "krem-vokrug-glaz-vzglyad-na-million",
+      "name": "Крем вокруг глаз Взгляд на миллион",
+      "category": "eye",
+      "price_rub": 1750,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-01/pW8lPG3g.jpeg",
+      "url": "https://oomph.ru/product/krem-vokrug-glaz-vzglyad-na-million",
+      "tier": "mid",
+      "volume": "45 г",
+      "effects": [
+        "uvlazhnenie",
+        "uvlazhnyayuschiy",
+        "antivozrastnoy-protiv-morschin"
+      ],
+      "effect_labels": [
+        "Увлажняющий",
+        "uvlazhnyayuschiy",
+        "Антивозрастной / Против морщин"
+      ],
+      "tasks": [
+        "uvlazhnenie-kozhi-vokrug-glaz",
+        "snyatie-ustalosti-vzglyada"
+      ],
+      "task_labels": [
+        "Увлажнение кожи вокруг глаз",
+        "Снятие усталости взгляда"
+      ],
+      "concerns": [
+        "uvlazhnenie",
+        "uvlazhnyayuschiy",
+        "antivozrastnoy-protiv-morschin",
+        "uvlazhnenie-kozhi-vokrug-glaz",
+        "snyatie-ustalosti-vzglyada"
+      ],
+      "tags": [
+        "uvlazhnenie",
+        "uvlazhnyayuschiy",
+        "antivozrastnoy-protiv-morschin",
+        "uvlazhnenie-kozhi-vokrug-glaz",
+        "snyatie-ustalosti-vzglyada"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi",
+        "zrelaya-kozha"
+      ],
+      "benefit": "Легкий, комплексный, незаменимый",
+      "source": "https://oomph.ru/product/krem-vokrug-glaz-vzglyad-na-million"
+    },
+    {
+      "id": "patchi-klubnichnyy-fizz",
+      "name": "Патчи Клубничный fizz",
+      "category": "eye",
+      "price_rub": 250,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/UsNjoopA.jpeg",
+      "url": "https://oomph.ru/product/patchi-klubnichnyy-fizz",
+      "tier": "economy",
+      "volume": "30 г",
+      "effects": [
+        "bez-effekta-lipkosti",
+        "bystryy-ukhod-ekspress"
+      ],
+      "effect_labels": [
+        "Без эффекта липкости",
+        "Быстрый уход (экспресс)"
+      ],
+      "tasks": [
+        "snyatie-otyokov",
+        "tonizirovanie-i-vyravnivanie-tona",
+        "uvlazhnenie-kozhi-vokrug-glaz"
+      ],
+      "task_labels": [
+        "Снятие отёков",
+        "Тонизирование и выравнивание тона",
+        "Увлажнение кожи вокруг глаз"
+      ],
+      "concerns": [
+        "bez-effekta-lipkosti",
+        "bystryy-ukhod-ekspress",
+        "snyatie-otyokov",
+        "tonizirovanie-i-vyravnivanie-tona",
+        "uvlazhnenie-kozhi-vokrug-glaz"
+      ],
+      "tags": [
+        "bez-effekta-lipkosti",
+        "bystryy-ukhod-ekspress",
+        "snyatie-otyokov",
+        "tonizirovanie-i-vyravnivanie-tona",
+        "uvlazhnenie-kozhi-vokrug-glaz"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Быстрый уход для кожи под глазами: снятие отёков и увлажнение",
+      "source": "https://oomph.ru/product/patchi-klubnichnyy-fizz"
+    },
+    {
+      "id": "patchi-ogurec-molodec",
+      "name": "Патчи Огурец молодец",
+      "category": "eye",
+      "price_rub": 250,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/_cwt7IGw.jpeg",
+      "url": "https://oomph.ru/product/patchi-ogurec-molodec",
+      "tier": "economy",
+      "volume": "30 г",
+      "effects": [
+        "bystryy-ukhod-ekspress",
+        "osvezhayuschiy-okhlazhdayuschiy"
+      ],
+      "effect_labels": [
+        "Быстрый уход (экспресс)",
+        "Освежающий / Охлаждающий"
+      ],
+      "tasks": [
+        "snyatie-otyokov",
+        "snyatie-tyomnykh-krugov-i-pigmentacii",
+        "snyatie-ustalosti-vzglyada",
+        "uvlazhnenie-kozhi-vokrug-glaz"
+      ],
+      "task_labels": [
+        "Снятие отёков",
+        "Снятие тёмных кругов и пигментации",
+        "Снятие усталости взгляда",
+        "Увлажнение кожи вокруг глаз"
+      ],
+      "concerns": [
+        "bystryy-ukhod-ekspress",
+        "osvezhayuschiy-okhlazhdayuschiy",
+        "snyatie-otyokov",
+        "snyatie-tyomnykh-krugov-i-pigmentacii",
+        "snyatie-ustalosti-vzglyada",
+        "uvlazhnenie-kozhi-vokrug-glaz"
+      ],
+      "tags": [
+        "bystryy-ukhod-ekspress",
+        "osvezhayuschiy-okhlazhdayuschiy",
+        "snyatie-otyokov",
+        "snyatie-tyomnykh-krugov-i-pigmentacii",
+        "snyatie-ustalosti-vzglyada",
+        "uvlazhnenie-kozhi-vokrug-glaz"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Освежающий уход вокруг глаз: снятие усталости и тёмных кругов",
+      "source": "https://oomph.ru/product/patchi-ogurec-molodec"
+    },
+    {
+      "id": "maska-dlya-lica-blueberry",
+      "name": "Маска для лица Blueberry",
+      "category": "mask",
+      "price_rub": 800,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/ZgGf8MtQ.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-blueberry",
+      "tier": "mid",
+      "volume": "75 г",
+      "effects": [
+        "matirovanie-i-kontrol-zhirnosti",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "effect_labels": [
+        "Матирование и контроль жирности",
+        "Успокоение и снятие раздражения"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "matirovanie-i-kontrol-zhirnosti",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "tags": [
+        "matirovanie-i-kontrol-zhirnosti",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "vse-tipy-kozhi",
+        "zhirnaya-kombinirovannaya"
+      ],
+      "benefit": "Эффект пудры на лице,  успокаивает кожу, матирует",
+      "source": "https://oomph.ru/product/maska-dlya-lica-blueberry"
+    },
+    {
+      "id": "maska-dlya-lica-look-me",
+      "name": "Маска для лица Look at me",
+      "category": "mask",
+      "price_rub": 800,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/x9RgG8Yg.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-look-me",
+      "tier": "mid",
+      "volume": "75 г",
+      "effects": [
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona",
+        "siyanie-0"
+      ],
+      "effect_labels": [
+        "Мягкое отшелушивание",
+        "Осветление и выравнивание тона",
+        "Сияние"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona",
+        "siyanie-0"
+      ],
+      "tags": [
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona",
+        "siyanie-0"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Скрабирование и очищение без пересушивания кожи, освежает, выравнивает тон лица",
+      "source": "https://oomph.ru/product/maska-dlya-lica-look-me"
+    },
+    {
+      "id": "maska-dlya-lica-vozvraschenie-aishi",
+      "name": "Маска для лица Возвращение Аиши",
+      "category": "mask",
+      "price_rub": 800,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/ZlvtOeLQ.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-vozvraschenie-aishi",
+      "tier": "mid",
+      "volume": "75 г",
+      "effects": [
+        "glubokoe-ochischenie-i-detoks",
+        "tonizirovanie-i-obnovlenie-kletok",
+        "uvlazhnenie"
+      ],
+      "effect_labels": [
+        "Глубокое очищение и детокс",
+        "Тонизирование и обновление клеток",
+        "Увлажняющий"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "glubokoe-ochischenie-i-detoks",
+        "tonizirovanie-i-obnovlenie-kletok",
+        "uvlazhnenie"
+      ],
+      "tags": [
+        "glubokoe-ochischenie-i-detoks",
+        "tonizirovanie-i-obnovlenie-kletok",
+        "uvlazhnenie"
+      ],
+      "skin_types": [
+        "vse-tipy-kozhi",
+        "zhirnaya-kombinirovannaya"
+      ],
+      "benefit": "«Возвращение Аиши» очарует твою кожу",
+      "source": "https://oomph.ru/product/maska-dlya-lica-vozvraschenie-aishi"
+    },
+    {
+      "id": "maska-dlya-lica-klubnichnaya-otlichnaya",
+      "name": "Маска для лица Клубничная отличная",
+      "category": "mask",
+      "price_rub": 800,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2024-04/%D0%9A%D0%BB%D1%83%D0%B1%D0%BD%D0%B8%D1%87%D0%BD%D0%B0%D1%8F%20%D0%BE%D1%82%D0%BB%D0%B8%D1%87%D0%BD%D0%B0%D1%8F%20%D1%81%D0%B2%D0%BE%D1%82%D1%87.jpg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-klubnichnaya-otlichnaya",
+      "tier": "mid",
+      "volume": "75 г",
+      "effects": [
+        "myagkoe-otshelushivanie",
+        "siyanie",
+        "osvetlenie-i-vyravnivanie-tona"
+      ],
+      "effect_labels": [
+        "Мягкое отшелушивание",
+        "siyanie",
+        "Осветление и выравнивание тона"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "myagkoe-otshelushivanie",
+        "siyanie",
+        "osvetlenie-i-vyravnivanie-tona"
+      ],
+      "tags": [
+        "myagkoe-otshelushivanie",
+        "siyanie",
+        "osvetlenie-i-vyravnivanie-tona"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Маска для лица",
+      "source": "https://oomph.ru/product/maska-dlya-lica-klubnichnaya-otlichnaya"
+    },
+    {
+      "id": "maska-dlya-lica-mangolipa",
+      "name": "Маска для лица Манголипа",
+      "category": "mask",
+      "price_rub": 800,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/x8sebGLA.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-mangolipa",
+      "tier": "mid",
+      "volume": "75 г",
+      "effects": [
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona",
+        "siyanie-0"
+      ],
+      "effect_labels": [
+        "Мягкое отшелушивание",
+        "Осветление и выравнивание тона",
+        "Сияние"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona",
+        "siyanie-0"
+      ],
+      "tags": [
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona",
+        "siyanie-0"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Тропическая маска для очищения и сияния",
+      "source": "https://oomph.ru/product/maska-dlya-lica-mangolipa"
+    },
+    {
+      "id": "balzam-dlya-gub-bee-love",
+      "name": "Бальзам для губ Bee in love",
+      "category": "lip",
+      "price_rub": 600,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2024-07/OOMPH_240627_%D0%B1%D0%B0%D0%BB%D1%8C%D0%B7%D0%B0%D0%BC_beeinlove_0188%20%281%29.jpg",
+      "url": "https://oomph.ru/product/balzam-dlya-gub-bee-love",
+      "tier": "economy",
+      "volume": null,
+      "effects": [
+        "zazhivlenie-potreskavshikhsya-gub",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "effect_labels": [
+        "Заживление потрескавшихся губ",
+        "Увлажняющий / Питательный"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "zazhivlenie-potreskavshikhsya-gub",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "tags": [
+        "zazhivlenie-potreskavshikhsya-gub",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Питательное шоколадное лакомство для губ",
+      "source": "https://oomph.ru/product/balzam-dlya-gub-bee-love"
+    },
+    {
+      "id": "balzam-dlya-gub-lemonade-lips",
+      "name": "Бальзам для губ Lemonade Lips",
+      "category": "lip",
+      "price_rub": 600,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2025-10/OOMPH_2209_Lemonade%20Lips_0250%20%281%29.jpg",
+      "url": "https://oomph.ru/product/balzam-dlya-gub-lemonade-lips",
+      "tier": "economy",
+      "volume": "15 г",
+      "effects": [
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "effect_labels": [
+        "Увлажняющий / Питательный"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "tags": [
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Лимонный уход для губ",
+      "source": "https://oomph.ru/product/balzam-dlya-gub-lemonade-lips"
+    },
+    {
+      "id": "balzam-dlya-gub-pear-jam",
+      "name": "Бальзам для губ Pear jam",
+      "category": "lip",
+      "price_rub": 600,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2025-10/OOMPH_2209_Pear%20jam_0246%20%281%29.jpg",
+      "url": "https://oomph.ru/product/balzam-dlya-gub-pear-jam",
+      "tier": "economy",
+      "volume": "15 г",
+      "effects": [
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "effect_labels": [
+        "Увлажняющий / Питательный"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "tags": [
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Масло манго и канделильский воск для мягкости ваших губ",
+      "source": "https://oomph.ru/product/balzam-dlya-gub-pear-jam"
+    },
+    {
+      "id": "sakharnyy-skrab-dlya-gub-lemon-lime-twist",
+      "name": "Сахарный скраб для губ Lemon Lime Twist",
+      "category": "lip",
+      "price_rub": 800,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2025-12/2636%20%20Lemon%20Lime%20Twist%20%281%29%20%281%29.jpg",
+      "url": "https://oomph.ru/product/sakharnyy-skrab-dlya-gub-lemon-lime-twist",
+      "tier": "mid",
+      "volume": "40 г",
+      "effects": [
+        "otshelushivayuschiy",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "effect_labels": [
+        "Отшелушивающий",
+        "Увлажняющий / Питательный"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "otshelushivayuschiy",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "tags": [
+        "otshelushivayuschiy",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Уход для губ с кисло-сладкой цитрусовой ноткой",
+      "source": "https://oomph.ru/product/sakharnyy-skrab-dlya-gub-lemon-lime-twist"
+    },
+    {
+      "id": "sakharnyy-skrab-dlya-gub-pop-rocks",
+      "name": "Сахарный скраб для губ Pop rocks",
+      "category": "lip",
+      "price_rub": 800,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2024-12/OOMPH_241221_2000001122501_0117%20%281%29.jpg",
+      "url": "https://oomph.ru/product/sakharnyy-skrab-dlya-gub-pop-rocks",
+      "tier": "mid",
+      "volume": "40 г",
+      "effects": [
+        "otshelushivayuschiy"
+      ],
+      "effect_labels": [
+        "Отшелушивающий"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "otshelushivayuschiy"
+      ],
+      "tags": [
+        "otshelushivayuschiy"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Сладкий сахарный скраб для нежных губ",
+      "source": "https://oomph.ru/product/sakharnyy-skrab-dlya-gub-pop-rocks"
+    },
+    {
+      "id": "skrab-dlya-gub-pearfection",
+      "name": "Скраб для губ Pearfection",
+      "category": "lip",
+      "price_rub": 800,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2025-10/OOMPH_2209_2000001123348_0244%20%281%29.jpg",
+      "url": "https://oomph.ru/product/skrab-dlya-gub-pearfection",
+      "tier": "mid",
+      "volume": "40 г",
+      "effects": [
+        "otshelushivayuschiy",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "effect_labels": [
+        "Отшелушивающий",
+        "Увлажняющий / Питательный"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "otshelushivayuschiy",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "tags": [
+        "otshelushivayuschiy",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Идеальный персиковый десерт для губ",
+      "source": "https://oomph.ru/product/skrab-dlya-gub-pearfection"
+    },
+    {
+      "id": "mylo-dlya-lica-happy-face",
+      "name": "Мыло для лица Happy face",
+      "category": "cleanser",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-01/yX59zbDg.jpeg",
+      "url": "https://oomph.ru/product/mylo-dlya-lica-happy-face",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "antisepticheskiy",
+        "uspokaivayuschiy"
+      ],
+      "effect_labels": [
+        "Антисептический",
+        "Успокаивающий"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "antisepticheskiy",
+        "uspokaivayuschiy"
+      ],
+      "tags": [
+        "antisepticheskiy",
+        "uspokaivayuschiy"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Прекрасно успокаивает кожу, обеспечивает очень мягкое очищение",
+      "source": "https://oomph.ru/product/mylo-dlya-lica-happy-face"
+    },
+    {
+      "id": "mylo-dlya-lica-hardcoal",
+      "name": "Мыло для лица Hardcoal",
+      "category": "cleanser",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-01/0dFRscBE.jpeg",
+      "url": "https://oomph.ru/product/mylo-dlya-lica-hardcoal",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "antisepticheskiy",
+        "glubokoe-ochischenie-0"
+      ],
+      "effect_labels": [
+        "Антисептический",
+        "Глубокое очищение"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "antisepticheskiy",
+        "glubokoe-ochischenie-0"
+      ],
+      "tags": [
+        "antisepticheskiy",
+        "glubokoe-ochischenie-0"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Глубоко очищает и балансирует",
+      "source": "https://oomph.ru/product/mylo-dlya-lica-hardcoal"
+    },
+    {
+      "id": "ochischayuschee-sredstvo-dlya-lica-green-doctor",
+      "name": "Очищающее средство для лица Green Doctor",
+      "category": "cleanser",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/z65RGk9w.jpeg",
+      "url": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-green-doctor",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "detoks-i-suzhenie-por",
+        "matirovanie-i-kontrol-zhirnosti"
+      ],
+      "effect_labels": [
+        "Детокс и сужение пор",
+        "Матирование и контроль жирности"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "detoks-i-suzhenie-por",
+        "matirovanie-i-kontrol-zhirnosti"
+      ],
+      "tags": [
+        "detoks-i-suzhenie-por",
+        "matirovanie-i-kontrol-zhirnosti"
+      ],
+      "skin_types": [
+        "vse-tipy-kozhi",
+        "zhirnaya-kombinirovannaya"
+      ],
+      "benefit": "Абсорбирует, заживляет, тонизирует",
+      "source": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-green-doctor"
+    },
+    {
+      "id": "ochischayuschee-sredstvo-dlya-lica-akvaglina",
+      "name": "Очищающее средство для лица Акваглина",
+      "category": "cleanser",
+      "price_rub": 700,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/OvyQvr7w.jpeg",
+      "url": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-akvaglina",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "siyanie-i-vyravnivanie-tona",
+        "uvlazhnenie",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "effect_labels": [
+        "Ежедневное мягкое очищение",
+        "Сияние и выравнивание тона",
+        "Увлажняющий",
+        "Успокоение и снятие раздражения"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "siyanie-i-vyravnivanie-tona",
+        "uvlazhnenie",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "tags": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "siyanie-i-vyravnivanie-tona",
+        "uvlazhnenie",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Успокаивает, смягчает воспаленную и проблемную кожу",
+      "source": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-akvaglina"
+    },
+    {
+      "id": "ochischayuschee-sredstvo-dlya-lica-angel-moy",
+      "name": "Очищающее средство для лица Ангел мой",
+      "category": "cleanser",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/TU2n4dog.jpeg",
+      "url": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-angel-moy",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "otshelushivanie-i-skrab",
+        "siyanie-i-vyravnivanie-tona",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "effect_labels": [
+        "Ежедневное мягкое очищение",
+        "Отшелушивание и скраб",
+        "Сияние и выравнивание тона",
+        "Успокоение и снятие раздражения"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "otshelushivanie-i-skrab",
+        "siyanie-i-vyravnivanie-tona",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "tags": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "otshelushivanie-i-skrab",
+        "siyanie-i-vyravnivanie-tona",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Отшелушивает, балансирует, смягчает",
+      "source": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-angel-moy"
+    },
+    {
+      "id": "ochischayuschee-sredstvo-dlya-lica-bambuk-i-aloe",
+      "name": "Очищающее средство для лица Бамбук и алоэ",
+      "category": "cleanser",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/ccpcfEKg.jpeg",
+      "url": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-bambuk-i-aloe",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "detoks-i-suzhenie-por",
+        "ezhednevnoe-myagkoe-ochischenie",
+        "otshelushivanie-i-skrab",
+        "siyanie-i-vyravnivanie-tona",
+        "uvlazhnenie"
+      ],
+      "effect_labels": [
+        "Детокс и сужение пор",
+        "Ежедневное мягкое очищение",
+        "Отшелушивание и скраб",
+        "Сияние и выравнивание тона",
+        "Увлажняющий"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "detoks-i-suzhenie-por",
+        "ezhednevnoe-myagkoe-ochischenie",
+        "otshelushivanie-i-skrab",
+        "siyanie-i-vyravnivanie-tona",
+        "uvlazhnenie"
+      ],
+      "tags": [
+        "detoks-i-suzhenie-por",
+        "ezhednevnoe-myagkoe-ochischenie",
+        "otshelushivanie-i-skrab",
+        "siyanie-i-vyravnivanie-tona",
+        "uvlazhnenie"
+      ],
+      "skin_types": [
+        "vse-tipy-kozhi",
+        "zhirnaya-kombinirovannaya"
+      ],
+      "benefit": "Комбо из натуральных ингредиентов для сияния кожи",
+      "source": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-bambuk-i-aloe"
+    },
+    {
+      "id": "ochischayuschee-sredstvo-dlya-lica-popkorn",
+      "name": "Очищающее средство для лица Попкорн",
+      "category": "cleanser",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/Sk3lIW5Q.jpeg",
+      "url": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-popkorn",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "otshelushivanie-i-skrab",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "effect_labels": [
+        "Ежедневное мягкое очищение",
+        "Отшелушивание и скраб",
+        "Успокоение и снятие раздражения"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "otshelushivanie-i-skrab",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "tags": [
+        "ezhednevnoe-myagkoe-ochischenie",
+        "otshelushivanie-i-skrab",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Разглаживает, успокаивает кожу",
+      "source": "https://oomph.ru/product/ochischayuschee-sredstvo-dlya-lica-popkorn"
+    },
+    {
+      "id": "tonik-dlya-lica-kodeks-chistoty",
+      "name": "Тоник для лица Кодекс чистоты",
+      "category": "toner",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2025-12/2250%20%D0%9A%D0%BE%D0%B4%D0%B5%D0%BA%D1%81%20%D1%87%D0%B8%D1%81%D1%82%D0%BE%D1%82%D1%8B.jpg",
+      "url": "https://oomph.ru/product/tonik-dlya-lica-kodeks-chistoty",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "antibakterialnyy",
+        "ochischenie",
+        "smyagchenie"
+      ],
+      "effect_labels": [
+        "Антибактериальный",
+        "Очищение",
+        "Смягчение"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "antibakterialnyy",
+        "ochischenie",
+        "smyagchenie"
+      ],
+      "tags": [
+        "antibakterialnyy",
+        "ochischenie",
+        "smyagchenie"
+      ],
+      "skin_types": [
+        "normalnaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Антибактериальный, свежий, легкий",
+      "source": "https://oomph.ru/product/tonik-dlya-lica-kodeks-chistoty"
+    },
+    {
+      "id": "maska-dlya-lica-amazing",
+      "name": "Маска для лица Amazing",
+      "category": "mask",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/-QvgJn6Q.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-amazing",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "antibakterialnyy-anti-akne",
+        "glubokoe-ochischenie-i-detoks"
+      ],
+      "effect_labels": [
+        "Антибактериальный / Анти-акне",
+        "Глубокое очищение и детокс"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "antibakterialnyy-anti-akne",
+        "glubokoe-ochischenie-i-detoks"
+      ],
+      "tags": [
+        "antibakterialnyy-anti-akne",
+        "glubokoe-ochischenie-i-detoks"
+      ],
+      "skin_types": [
+        "vse-tipy-kozhi",
+        "zhirnaya-kombinirovannaya"
+      ],
+      "benefit": "Снимает покраснения, противовоспалительная",
+      "source": "https://oomph.ru/product/maska-dlya-lica-amazing"
+    },
+    {
+      "id": "maska-dlya-lica-beauty-skin",
+      "name": "Маска для лица Beauty skin",
+      "category": "mask",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-03/T9WUiEfA.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-beauty-skin",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "vosstanovlenie-i-pitanie",
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona",
+        "uvlazhnenie"
+      ],
+      "effect_labels": [
+        "Восстановление и питание",
+        "Мягкое отшелушивание",
+        "Осветление и выравнивание тона",
+        "Увлажняющий"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "vosstanovlenie-i-pitanie",
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona",
+        "uvlazhnenie"
+      ],
+      "tags": [
+        "vosstanovlenie-i-pitanie",
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona",
+        "uvlazhnenie"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Интенсивно питающая, восстанавливающая, насыщенная",
+      "source": "https://oomph.ru/product/maska-dlya-lica-beauty-skin"
+    },
+    {
+      "id": "maska-dlya-lica-choco-mint-day",
+      "name": "Маска для лица Choco mint day",
+      "category": "mask",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2025-07/QIbszDWw.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-choco-mint-day",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnyayuschiy",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "effect_labels": [
+        "Восстановление и питание",
+        "uvlazhnyayuschiy",
+        "Успокоение и снятие раздражения"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnyayuschiy",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "tags": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnyayuschiy",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Шоколадно-мятное мороженое для вашей кожи",
+      "source": "https://oomph.ru/product/maska-dlya-lica-choco-mint-day"
+    },
+    {
+      "id": "maska-dlya-lica-don-avocado",
+      "name": "Маска для лица Don Avocado",
+      "category": "mask",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/i3KkSQVw.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-don-avocado",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie"
+      ],
+      "effect_labels": [
+        "Восстановление и питание",
+        "Увлажняющий"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie"
+      ],
+      "tags": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Авокадо обеспечит твою кожу полезными витаминами K и E",
+      "source": "https://oomph.ru/product/maska-dlya-lica-don-avocado"
+    },
+    {
+      "id": "maska-dlya-lica-sea-resort-and-spa",
+      "name": "Маска для лица Sea resort and spa",
+      "category": "mask",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/bgrcE1aQ.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-sea-resort-and-spa",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "vosstanovlenie-i-pitanie",
+        "siyanie-0",
+        "uvlazhnenie",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "effect_labels": [
+        "Восстановление и питание",
+        "Сияние",
+        "Увлажняющий",
+        "Успокоение и снятие раздражения"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "vosstanovlenie-i-pitanie",
+        "siyanie-0",
+        "uvlazhnenie",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "tags": [
+        "vosstanovlenie-i-pitanie",
+        "siyanie-0",
+        "uvlazhnenie",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Расслабляющая, восстанавливающая и богатая минералами маска",
+      "source": "https://oomph.ru/product/maska-dlya-lica-sea-resort-and-spa"
+    },
+    {
+      "id": "maska-dlya-lica-zanovo-roditsya",
+      "name": "Маска для лица Заново родиться",
+      "category": "mask",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/NL9GNpMw.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-zanovo-roditsya",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "vosstanovlenie-i-pitanie",
+        "myagkoe-otshelushivanie",
+        "tonizirovanie-i-obnovlenie-kletok"
+      ],
+      "effect_labels": [
+        "Восстановление и питание",
+        "Мягкое отшелушивание",
+        "Тонизирование и обновление клеток"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "vosstanovlenie-i-pitanie",
+        "myagkoe-otshelushivanie",
+        "tonizirovanie-i-obnovlenie-kletok"
+      ],
+      "tags": [
+        "vosstanovlenie-i-pitanie",
+        "myagkoe-otshelushivanie",
+        "tonizirovanie-i-obnovlenie-kletok"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Тонизирующее зелье из женьшеня и свежей папайи",
+      "source": "https://oomph.ru/product/maska-dlya-lica-zanovo-roditsya"
+    },
+    {
+      "id": "maska-dlya-lica-megamyatka",
+      "name": "Маска для лица Мегамятка",
+      "category": "mask",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-02/7MbIV3xA.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-megamyatka",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "glubokoe-ochischenie-i-detoks",
+        "matirovanie-i-kontrol-zhirnosti",
+        "myagkoe-otshelushivanie"
+      ],
+      "effect_labels": [
+        "Глубокое очищение и детокс",
+        "Матирование и контроль жирности",
+        "Мягкое отшелушивание"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "glubokoe-ochischenie-i-detoks",
+        "matirovanie-i-kontrol-zhirnosti",
+        "myagkoe-otshelushivanie"
+      ],
+      "tags": [
+        "glubokoe-ochischenie-i-detoks",
+        "matirovanie-i-kontrol-zhirnosti",
+        "myagkoe-otshelushivanie"
+      ],
+      "skin_types": [
+        "vse-tipy-kozhi",
+        "zhirnaya-kombinirovannaya"
+      ],
+      "benefit": "Глубокое очищение, фантастическая чистота и свежесть",
+      "source": "https://oomph.ru/product/maska-dlya-lica-megamyatka"
+    },
+    {
+      "id": "maska-dlya-lica-myod-i-kurkuma",
+      "name": "Маска для лица Мёд и куркума",
+      "category": "mask",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/AzTqIUZw.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-myod-i-kurkuma",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "antibakterialnyy-anti-akne",
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona"
+      ],
+      "effect_labels": [
+        "Антибактериальный / Анти-акне",
+        "Мягкое отшелушивание",
+        "Осветление и выравнивание тона"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "antibakterialnyy-anti-akne",
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona"
+      ],
+      "tags": [
+        "antibakterialnyy-anti-akne",
+        "myagkoe-otshelushivanie",
+        "osvetlenie-i-vyravnivanie-tona"
+      ],
+      "skin_types": [
+        "vse-tipy-kozhi",
+        "zhirnaya-kombinirovannaya"
+      ],
+      "benefit": "Освежающие травы и фруктовые соки для свежей и обновлённой кожи",
+      "source": "https://oomph.ru/product/maska-dlya-lica-myod-i-kurkuma"
+    },
+    {
+      "id": "maska-dlya-lica-ovsyanka-ser",
+      "name": "Маска для лица Овсянка, сэр!",
+      "category": "mask",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2023-06/USUuwMDQ.jpeg",
+      "url": "https://oomph.ru/product/maska-dlya-lica-ovsyanka-ser",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "effect_labels": [
+        "Восстановление и питание",
+        "Увлажняющий",
+        "Успокоение и снятие раздражения"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "tags": [
+        "vosstanovlenie-i-pitanie",
+        "uvlazhnenie",
+        "uspokoenie-i-snyatie-razdrazheniya"
+      ],
+      "skin_types": [
+        "chuvstvitelnaya",
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Нежнейшая смесь бананов, ванили и овса",
+      "source": "https://oomph.ru/product/maska-dlya-lica-ovsyanka-ser"
+    },
+    {
+      "id": "balzam-dlya-gub-i-s-secret",
+      "name": "Бальзам для губ I & S secret",
+      "category": "lip",
+      "price_rub": null,
+      "currency": "RUB",
+      "image": "https://api.oomph.ru/sites/default/files/styles/image_448x410/public/2026-03/2677%20I%20%26%20S%20secret%20%D1%81%D0%B2%D0%BE%D1%82%D1%87%20.jpg",
+      "url": "https://oomph.ru/product/balzam-dlya-gub-i-s-secret",
+      "tier": "mid",
+      "volume": null,
+      "effects": [
+        "blesk-i-siyanie",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "effect_labels": [
+        "Блеск и сияние",
+        "Увлажняющий / Питательный"
+      ],
+      "tasks": [],
+      "task_labels": [],
+      "concerns": [
+        "blesk-i-siyanie",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "tags": [
+        "blesk-i-siyanie",
+        "uvlazhnyayuschiy-pitatelnyy"
+      ],
+      "skin_types": [
+        "sukhaya-obezvozhennaya",
+        "vse-tipy-kozhi"
+      ],
+      "benefit": "Нежно питает и защищает губы, окутывая ароматом ванили и розы",
+      "source": "https://oomph.ru/product/balzam-dlya-gub-i-s-secret"
+    }
+  ]
+}
