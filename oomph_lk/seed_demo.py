@@ -28,12 +28,12 @@ BUDGETS = list(engine.BUDGET_LABELS.keys())
 SOURCES = ["web", "web", "web", "web", "web", "web", "widget", "widget", "telegram"]
 
 FACE_PHOTOS = [
-    "https://space.ascendbrand.ru/sites/oomphlk/assets/faces/skin-face-1.png",
-    "https://space.ascendbrand.ru/sites/oomphlk/assets/faces/skin-realistic.png",
-    "https://space.ascendbrand.ru/sites/oomphlk/assets/faces/persona-acne.png",
-    "https://space.ascendbrand.ru/sites/oomphlk/assets/faces/persona-couperose.png",
-    "https://space.ascendbrand.ru/sites/oomphlk/assets/faces/persona-mature.png",
-    "https://space.ascendbrand.ru/sites/oomphlk/assets/faces/persona-pores.png",
+    "https://www.ascendbrand.ru/space/sites/oomphlk/assets/faces/skin-face-1.png",
+    "https://www.ascendbrand.ru/space/sites/oomphlk/assets/faces/skin-realistic.png",
+    "https://www.ascendbrand.ru/space/sites/oomphlk/assets/faces/persona-acne.png",
+    "https://www.ascendbrand.ru/space/sites/oomphlk/assets/faces/persona-couperose.png",
+    "https://www.ascendbrand.ru/space/sites/oomphlk/assets/faces/persona-mature.png",
+    "https://www.ascendbrand.ru/space/sites/oomphlk/assets/faces/persona-pores.png",
 ]
 
 SKIN_HEADLINES = {

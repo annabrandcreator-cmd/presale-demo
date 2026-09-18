@@ -142,11 +142,52 @@ def api_analytics_basket():
         return jsonify(analytics.get_basket(c, **_period_args()))
 
 
+PHOTO_BASE = "https://www.ascendbrand.ru/space/sites/oomphlk/assets/faces/"
+_PHOTO_ALIASES = (
+    "https://www.ascendbrand.ru/space/sites/oomphlk/assets/faces/",
+    "https://space.ascendbrand.ru/sites/oomphlk/assets/faces/",
+    "/static/assets/faces/",
+    "assets/faces/",
+)
+
+
+def _fix_photo_url(url):
+    if not url:
+        return url
+    s = str(url)
+    for prefix in _PHOTO_ALIASES:
+        if s.startswith(prefix):
+            return PHOTO_BASE + s[len(prefix):].lstrip("/")
+    if "/faces/" in s:
+        return PHOTO_BASE + s.rsplit("/", 1)[-1]
+    return s
+
+
+def _rewrite_photos(obj):
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if k in ("photo_url",) and isinstance(v, str):
+                out[k] = _fix_photo_url(v)
+            elif k == "skin_scan" and isinstance(v, dict):
+                scan = dict(v)
+                if isinstance(scan.get("photo_url"), str):
+                    scan["photo_url"] = _fix_photo_url(scan["photo_url"])
+                out[k] = scan
+            else:
+                out[k] = _rewrite_photos(v)
+        return out
+    if isinstance(obj, list):
+        return [_rewrite_photos(x) for x in obj]
+    return obj
+
+
 @bp.route("/api/clients")
 def api_clients():
     ensure_db()
     with db_conn() as c:
-        return jsonify(analytics.get_clients(c, **_period_args(), limit=request.args.get("limit", 50)))
+        data = analytics.get_clients(c, **_period_args(), limit=request.args.get("limit", 50))
+    return jsonify(_rewrite_photos(data))
 
 
 @bp.route("/api/clients/<session_id>")
@@ -156,4 +197,4 @@ def api_client_detail(session_id):
         detail = analytics.get_client_detail(c, session_id, CATALOG)
     if not detail:
         abort(404)
-    return jsonify(detail)
+    return jsonify(_rewrite_photos(detail))
